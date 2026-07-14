@@ -1,10 +1,16 @@
-use crate::frontend::logger;
+use crate::frontend::{cli::Application, logger};
 
 pub mod backend;
 pub mod data;
 pub mod frontend;
 
 fn main() {
+    // Set up logger
     logger::init().unwrap();
-    frontend::cli::main_loop();
+
+    // Create application instance
+    let mut app = Application::new();
+
+    // Launch main loop
+    app.main_loop();
 }
