@@ -8,3 +8,4 @@ readme = "README.md"
 repository = "https://codeberg.org/bazelik-dev/OpenE2E"
 
 [dependencies]
+log = "0.4.33"

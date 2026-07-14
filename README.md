@@ -87,10 +87,11 @@ Enable obfuscation to store messages as media files instead of plaintext:
 
 # Roadmap
 
-- [ ] CLI prototype
+- [x] CLI prototype
 - [ ] Core encryption and key exchange
 - [ ] Encrypted message send/receive
 - [ ] Local message storage
+- [ ] CLI chat app, demo release
 - [ ] GUI chat app with Slint
 - [ ] Message history view
 - [ ] Secure key management
