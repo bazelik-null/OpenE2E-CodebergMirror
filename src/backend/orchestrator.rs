@@ -1,5 +1,3 @@
-use uuid::Uuid;
-
 use crate::backend::managers::user_manager::User;
 
 static KEY_COUNT: usize = 1;
@@ -13,20 +11,20 @@ impl Orchestrator {
         Orchestrator { users: vec![] }
     }
 
-    pub fn create_user(&mut self, password: &str) -> Result<&User, String> {
-        let user = User::new(KEY_COUNT, password)?;
+    pub fn create_user(&mut self, name: &str, password: &str) -> Result<&User, String> {
+        let user = User::new(KEY_COUNT, name, password)?;
 
         self.users.push(user);
 
         Ok(self.users.last().unwrap())
     }
 
-    pub fn delete_user(&mut self, uid: Uuid) {
-        self.users.retain(|user| user.uid != uid);
+    pub fn delete_user(&mut self, name: &str) {
+        self.users.retain(|user| user.name != name);
     }
 
-    pub fn get_users_uuids(&self) -> Vec<Uuid> {
-        self.users.iter().map(|user| user.uid).collect()
+    pub fn get_users_uuids(&self) -> Vec<&str> {
+        self.users.iter().map(|user| user.name.as_str()).collect()
     }
 
     // TODO

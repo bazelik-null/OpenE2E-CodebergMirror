@@ -1,9 +1,8 @@
 use log::{self, error, info};
-use uuid::Uuid;
 use std::io::{self, Write};
 
-use crate::{frontend::commands::{Command, scan_commands}};
 use crate::backend::orchestrator::Orchestrator;
+use crate::frontend::commands::{Command, scan_commands};
 
 pub struct Application {
     orchestrator: Orchestrator,
@@ -12,12 +11,17 @@ pub struct Application {
 
 impl Application {
     pub fn new() -> Application {
-        Application { orchestrator: Orchestrator::new(), should_exit: false }
+        Application {
+            orchestrator: Orchestrator::new(),
+            should_exit: false,
+        }
     }
 
     pub fn main_loop(&mut self) {
         loop {
-            if self.should_exit { break; }
+            if self.should_exit {
+                break;
+            }
 
             let input = self.get_input();
 
@@ -61,13 +65,19 @@ impl Application {
     }
 
     fn user_creation(&mut self) -> Result<(), String> {
-        println!("Enter user's password:");
+        println!("Enter username:");
 
-        let input = self.get_input();
+        let name = self.get_input();
 
-        let user = self.orchestrator.create_user(&input)?;
+        println!("Enter password:");
 
-        println!("Created user: {}", user.uid);
+        let password = self.get_input();
+
+        info!("Creating user...");
+
+        let user = self.orchestrator.create_user(&name, &password)?;
+
+        info!("Created user: {}", user.name);
 
         Ok(())
     }
@@ -81,14 +91,13 @@ impl Application {
     }
 
     fn user_deletion(&mut self) -> Result<(), String> {
-        println!("Enter user's UUID:");
+        println!("Enter username:");
 
-        let input = self.get_input();
-        let uid = Uuid::parse_str(&input).map_err(|error| error.to_string())?;
+        let name = self.get_input();
 
-        self.orchestrator.delete_user(uid);
+        self.orchestrator.delete_user(&name);
 
-        println!("Deleted user: {}", uid);
+        info!("Deleted user: {}", name);
 
         Ok(())
     }
