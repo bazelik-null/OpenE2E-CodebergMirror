@@ -20,12 +20,7 @@ impl Log for OpenE2ELogger {
             };
             let colored_target = record.target().to_string().black();
 
-            eprintln!(
-                "[{}] {}: {}",
-                colored_level,
-                colored_target,
-                record.args()
-            );
+            eprintln!("[{}] {}: {}", colored_level, colored_target, record.args());
         }
     }
 

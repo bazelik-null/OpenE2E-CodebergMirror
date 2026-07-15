@@ -1,6 +1,6 @@
 <div align="center">
 <h1> OpenE2E </h1>
-<img src="doc/img/logo.png" width="500">
+<img src="doc/img/logo.png">
 </div>
 
 > [!WARNING]
@@ -33,11 +33,6 @@ OpenE2E provides a simple, chat-like interface with **E2E encryption and Perfect
 
 # Installation
 
-### Requirements
-- Rust
-- [Slint](https://slint.dev/) dependencies
-- vodozemac crate
-
 ### Build from Source
 
 ```bash
@@ -46,6 +41,9 @@ cd OpenE2E
 cargo build --release
 ./target/release/OpenE2E
 ```
+
+### Pre-built binaries
+**Work in progress.**
 
 # Usage
 

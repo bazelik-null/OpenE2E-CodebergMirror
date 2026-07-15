@@ -6,6 +6,12 @@ pub struct Orchestrator {
     users: Vec<User>,
 }
 
+impl Default for Orchestrator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Orchestrator {
     pub fn new() -> Orchestrator {
         Orchestrator { users: vec![] }
@@ -23,7 +29,7 @@ impl Orchestrator {
         self.users.retain(|user| user.name != name);
     }
 
-    pub fn get_users_uuids(&self) -> Vec<&str> {
+    pub fn get_usernames(&self) -> Vec<&str> {
         self.users.iter().map(|user| user.name.as_str()).collect()
     }
 
