@@ -18,7 +18,7 @@ impl Log for OpenE2ELogger {
                 Level::Debug => level_str.blue().bold(),
                 Level::Trace => level_str.magenta().bold(),
             };
-            let colored_target = record.target().to_string().black();
+            let colored_target = record.target().to_string().b_black();
 
             eprintln!("[{}] {}: {}", colored_level, colored_target, record.args());
         }

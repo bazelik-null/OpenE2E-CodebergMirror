@@ -43,7 +43,7 @@ impl Application {
     fn display_welcome(&self) {
         println!();
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
-        println!("{}", "### OpenE2E CLI interface v0.2 ###".cyan());
+        println!("{}", "### OpenE2E CLI interface v0.3 ###".cyan());
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
         println!("{}", "Type 'help' for available commands".cyan());
         println!();
@@ -54,49 +54,42 @@ impl Application {
             return Ok(());
         }
 
-        let command = scan_commands(input)
-            .ok_or("Unknown command. Type 'help' for available commands.")?;
+        let command =
+            scan_commands(input).ok_or("Unknown command. Type 'help' for available commands.")?;
 
         match command {
             Command::Exit => self.handle_exit(),
             Command::Help => self.display_help(),
-            Command::Encrypt => self.encrypt()?,
-            Command::Decrypt => self.decrypt()?,
-            Command::NewUser => self.user_creation()?,
-            Command::DeleteUser => self.user_deletion()?,
+            Command::Encrypt { text } => self.encrypt(&text)?,
+            Command::Decrypt { text } => self.decrypt(&text)?,
+            Command::NewUser { name, password } => self.user_creation(&name, &password)?,
+            Command::DeleteUser { name } => self.user_deletion(&name)?,
             Command::ListUsers => self.users_list(),
-            Command::LoginUser => self.user_login()?,
+            Command::LoginUser { name } => self.user_login(&name)?,
             Command::LogoutUser => self.user_logout()?,
-            Command::NewSession => self.session_creation()?,
-            Command::DeleteSession => self.session_deletion()?,
+            Command::NewSession { name } => self.session_creation(&name)?,
+            Command::DeleteSession { name } => self.session_deletion(&name)?,
             Command::ListSessions => self.session_list()?,
-            Command::OpenSession => self.session_open()?,
+            Command::OpenSession { name } => self.session_open(&name)?,
             Command::ExitSession => self.session_close()?,
         }
 
         Ok(())
     }
 
-    fn user_creation(&mut self) -> Result<(), String> {
-        self.display_section("Create New User");
-
-        let name = self.prompt_user_input("Username")?;
-        let password = self.prompt_user_input("Password")?;
-
+    fn user_creation(&mut self, name: &str, password: &str) -> Result<(), String> {
         info!("Creating user...");
-        let user = self.user_manager.new_user(&name, &password)?;
+        let user = self.user_manager.new_user(name, password)?;
         info!("User '{}' created successfully", user.name);
 
-        self.user_manager.select_user(&name)?;
+        self.user_manager.select_user(name)?;
         println!();
 
         Ok(())
     }
 
-    fn user_deletion(&mut self) -> Result<(), String> {
-        self.display_section("Delete User");
-        let name = self.prompt_user_input("Username")?;
-        self.user_manager.delete_user(&name);
+    fn user_deletion(&mut self, name: &str) -> Result<(), String> {
+        self.user_manager.delete_user(name);
         info!("User '{}' deleted", name);
         println!();
         Ok(())
@@ -117,26 +110,23 @@ impl Application {
         println!();
     }
 
-    fn user_login(&mut self) -> Result<(), String> {
-        self.display_section("Login");
-        let name = self.prompt_user_input("Username")?;
-        self.user_manager.select_user(&name)?;
+    fn user_login(&mut self, name: &str) -> Result<(), String> {
+        self.user_manager.select_user(name)?;
         info!("User '{}' selected", name);
         println!();
         Ok(())
     }
 
     fn user_logout(&mut self) -> Result<(), String> {
-        self.display_section("Logging out");
         self.user_manager.deselect_user();
+        info!("Logged out");
         println!();
         Ok(())
     }
 
-    fn session_creation(&mut self) -> Result<(), String> {
+    fn session_creation(&mut self, name: &str) -> Result<(), String> {
         self.display_section("Create New Session");
 
-        let name = self.prompt_user_input("Session name")?;
         let session_type = self.prompt_session_type()?;
 
         info!("Creating session...");
@@ -146,8 +136,8 @@ impl Application {
             .ok_or("No user selected")?;
 
         match session_type.as_str() {
-            "in" => create_inbound_session(user, &name)?,
-            "out" => create_outbound_session(user, &name)?,
+            "in" => create_inbound_session(user, name)?,
+            "out" => create_outbound_session(user, name)?,
             _ => return Err("Unknown session type".to_string()),
         }
 
@@ -157,16 +147,13 @@ impl Application {
         Ok(())
     }
 
-    fn session_deletion(&mut self) -> Result<(), String> {
-        self.display_section("Delete Session");
-        let name = self.prompt_user_input("Session name")?;
-
+    fn session_deletion(&mut self, name: &str) -> Result<(), String> {
         let user = self
             .user_manager
             .get_current_user_mut()
             .ok_or("No user selected")?;
 
-        user.session_manager.delete_session(&name);
+        user.session_manager.delete_session(name);
         info!("Session '{}' deleted", name);
         println!();
 
@@ -195,16 +182,13 @@ impl Application {
         Ok(())
     }
 
-    fn session_open(&mut self) -> Result<(), String> {
-        self.display_section("Open Session");
-        let name = self.prompt_user_input("Session name")?;
-
+    fn session_open(&mut self, name: &str) -> Result<(), String> {
         let user = self
             .user_manager
             .get_current_user_mut()
             .ok_or("No user selected")?;
 
-        user.session_manager.select_session(&name)?;
+        user.session_manager.select_session(name)?;
         info!("Session '{}' selected", name);
         println!();
 
@@ -212,48 +196,45 @@ impl Application {
     }
 
     fn session_close(&mut self) -> Result<(), String> {
-        self.display_section("Closing session");
-
         let user = self
             .user_manager
             .get_current_user_mut()
             .ok_or("No user selected")?;
 
         user.session_manager.deselect_session();
+        info!("Session closed");
         println!();
 
         Ok(())
     }
 
-    fn encrypt(&mut self) -> Result<(), String> {
+    fn encrypt(&mut self, text: &str) -> Result<(), String> {
         println!();
-        println!("{}", "Enter message to encrypt:".yellow().bold());
 
-        let msg = prompt_input();
         let user = self
             .user_manager
             .get_current_user_mut()
             .ok_or("No user selected")?;
 
-        let encrypted = user.session_manager.encrypt(&msg)?;
+        let encrypted = user.session_manager.encrypt(text)?;
         println!(">> {}", encrypted);
+
         println!();
 
         Ok(())
     }
 
-    fn decrypt(&mut self) -> Result<(), String> {
+    fn decrypt(&mut self, text: &str) -> Result<(), String> {
         println!();
-        println!("{}", "Enter message to decrypt:".yellow().bold());
 
-        let msg = prompt_input();
         let user = self
             .user_manager
             .get_current_user_mut()
             .ok_or("No user selected")?;
 
-        let decrypted = user.session_manager.decrypt(&msg)?;
-        println!(">> {}", decrypted);
+        let encrypted = user.session_manager.decrypt(text)?;
+        println!(">> {}", encrypted);
+
         println!();
 
         Ok(())
@@ -267,43 +248,41 @@ impl Application {
     fn display_help(&self) {
         println!();
         println!("{}", "Available Commands".yellow().bold());
-        println!("{}", "-".repeat(SECTION_WIDTH).b_black());
+        println!("{}", "-".repeat(SECTION_WIDTH).grey());
         println!("  {} - Exit the application", "exit".cyan());
         println!("  {} - Show this help message", "help".cyan());
         println!();
         println!("{}", "User Management".yellow().bold());
-        println!("  {} - Create a new user", "u new".cyan());
-        println!("  {} - Delete a user", "u delete".cyan());
+        println!(
+            "  {} - Create a new user",
+            "u new <username> <password>".cyan()
+        );
+        println!("  {} - Delete a user", "u delete <username>".cyan());
         println!("  {} - List all users", "u list".cyan());
-        println!("  {} - Login", "u login".cyan());
+        println!("  {} - Login", "u login <username>".cyan());
         println!("  {} - Logout", "u logout".cyan());
         println!();
         println!("{}", "Session Management".yellow().bold());
-        println!("  {} - Create a new session", "s new".cyan());
-        println!("  {} - Delete a session", "s delete".cyan());
+        println!("  {} - Create a new session", "s new <session_name>".cyan());
+        println!("  {} - Delete a session", "s delete <session_name>".cyan());
         println!("  {} - List all sessions", "s list".cyan());
-        println!("  {} - Open session", "s open".cyan());
+        println!("  {} - Open session", "s open <session_name>".cyan());
         println!("  {} - Close session", "s exit".cyan());
         println!();
         println!("{}", "Chatting".yellow().bold());
-        println!("  {} - Encrypt a message", "e".cyan());
-        println!("  {} - Decrypt a message", "d".cyan());
+        println!("  {} - Encrypt text", "e <text>".cyan());
+        println!("  {} - Decrypt text", "d <text>".cyan());
         println!();
     }
 
     fn display_section(&self, title: &str) {
         println!();
         println!("{}", title.to_string().yellow().bold());
-        println!("{}", "-".repeat(SECTION_WIDTH).b_black());
-    }
-
-    fn prompt_user_input(&self, label: &str) -> Result<String, String> {
-        println!("{}:", label.to_string().b_black());
-        Ok(prompt_input())
+        println!("{}", "-".repeat(SECTION_WIDTH).grey());
     }
 
     fn prompt_session_type(&self) -> Result<String, String> {
-        println!("{}", "Session type:".b_black());
+        println!("{}", "Session type:".grey());
         println!("  {} (inbound)", "in".green());
         println!("  {} (outbound)", "out".green());
         Ok(prompt_input())
@@ -321,17 +300,17 @@ fn prompt_input() -> String {
 }
 
 fn create_inbound_session(user: &mut User, name: &str) -> Result<(), String> {
-    println!("{}", "Generating your keys...".b_black());
+    println!("{}", "Generating your keys...".grey());
     let our_keys = user.session_manager.generate_keys(&mut user.account)?;
-    println!("{}", "Share this with the other party:".b_black());
+    println!("{}", "Share this with the other party:".grey());
     println!("{}", our_keys.bold());
     println!();
 
-    println!("{}", "Paste the other party's keys:".b_black());
+    println!("{}", "Paste the other party's keys:".grey());
     let remote_keys = prompt_input();
     println!();
 
-    println!("{}", "Paste init message from them:".b_black());
+    println!("{}", "Paste init message from them:".grey());
     let first_message = prompt_input();
     println!();
 
@@ -342,23 +321,23 @@ fn create_inbound_session(user: &mut User, name: &str) -> Result<(), String> {
         &first_message,
     )?;
 
-    user.session_manager.select_session(&name)
+    user.session_manager.select_session(name)
 }
 
 fn create_outbound_session(user: &mut User, name: &str) -> Result<(), String> {
-    println!("{}", "Generating your keys...".b_black());
+    println!("{}", "Generating your keys...".grey());
     let our_keys = user.session_manager.generate_keys(&mut user.account)?;
-    println!("{}", "Share this with the other party:".b_black());
+    println!("{}", "Share this with the other party:".grey());
     println!("{}", our_keys.bold());
     println!();
 
-    println!("{}", "Paste the other party's keys:".b_black());
+    println!("{}", "Paste the other party's keys:".grey());
     let remote_keys = prompt_input();
     println!();
 
     user.session_manager
         .establish_session(&mut user.account, name, &remote_keys)?;
-    user.session_manager.select_session(&name)?;
+    user.session_manager.select_session(name)?;
 
     println!(
         "{}",

@@ -8,9 +8,13 @@
 > Under development. Not ready for use yet.
 > Check [Roadmap](#roadmap).
 
+**Languages:** [English](README.md) | [Русский](doc/README.ru.md)
+
 # Overview
 
-OpenE2E provides a simple, chat-like interface with **E2E encryption and Perfect Forward Secrecy (PFS)** based on **Matrix's** OLM, allowing you to communicate securely over insecure communication channels.
+OpenE2E provides a simple, chat-like interface with **end-to-end encryption (E2E) and Perfect Forward Secrecy (PFS)** based on **Matrix's** OLM, allowing you to communicate securely over insecure communication channels.
+
+More information about encryption algorithm and it's inner workings: [OLM.md](doc/OLM.md)
 
 # Features
 
@@ -45,25 +49,6 @@ cargo build --release
 ### Pre-built binaries
 **Work in progress.**
 
-# Usage
-
-### Basic Workflow
-
-1. Launch the application
-2. Click **"New Session"** to create a new encrypted conversation
-3. Copy your **Public Key** and send it to your contact
-4. Paste your contact's **Public Key** when prompted
-5. Start typing messages in the chat input field
-6. Copy encrypted messages and send via your preferred channel
-7. Paste received encrypted messages to decrypt
-
-### Obfuscation Mode
-
-Enable obfuscation to store messages as media files instead of plaintext:
-- Prevents automated analysis of message patterns
-- Maintains plausible deniability
-- Access messages only through the app
-
 # Security Features
 
 - **Perfect Forward Secrecy (PFS)** - OLM's Double Ratchet algorithm ensures past messages remain secure even if long-term keys are compromised
@@ -71,11 +56,12 @@ Enable obfuscation to store messages as media files instead of plaintext:
 - **Local Storage Only** - No cloud sync, all data stays on your device
 - **Untrusted Channel Resistant** - Messages can be sent through any public platform without additional setup
 
-# Architecture
+### Obfuscation Mode
 
-- **Frontend** - Slint UI framework for cross-platform GUI
-- **Backend** - Rust cryptographic engine
-- **Storage** - Local SQLite database for message history, keys, etc.
+Enable obfuscation to store messages as media files instead of plaintext:
+- Prevents automated analysis of message patterns
+- Maintains plausible deniability
+- Access messages only through the app
 
 # Limitations
 
@@ -86,8 +72,8 @@ Enable obfuscation to store messages as media files instead of plaintext:
 # Roadmap
 
 - [x] CLI prototype
-- [ ] Core encryption and key exchange
-- [ ] Encrypted message send/receive
+- [x] Core encryption and key exchange
+- [x] Encrypted message send/receive
 - [ ] Local session storage
 - [ ] Message DB storage
 - [ ] CLI chat app, demo release

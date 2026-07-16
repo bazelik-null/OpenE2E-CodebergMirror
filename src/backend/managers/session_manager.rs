@@ -155,10 +155,10 @@ impl SessionManager {
         if let Some(idx) = removed_idx {
             if self.current_session == Some(idx) {
                 self.current_session = None;
-            } else if let Some(curr) = self.current_session {
-                if idx < curr {
-                    self.current_session = Some(curr - 1);
-                }
+            } else if let Some(curr) = self.current_session
+                && idx < curr
+            {
+                self.current_session = Some(curr - 1);
             }
         }
     }
