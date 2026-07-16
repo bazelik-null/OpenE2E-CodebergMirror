@@ -2,6 +2,7 @@ use crate::frontend::{cli::Application, logger};
 
 pub mod backend;
 pub mod data;
+pub mod error_mapper;
 pub mod frontend;
 
 fn main() {

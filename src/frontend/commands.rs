@@ -1,5 +1,3 @@
-use log::error;
-
 pub enum Command {
     // Misc
     Exit, // exit
@@ -8,8 +6,8 @@ pub enum Command {
     // User control
     NewUser,    // u new
     DeleteUser, // u delete
-    ExitUser,   // u exit
-    OpenUser,   // u open
+    LogoutUser, // u logout
+    LoginUser,  // u login
     ListUsers,  // u list
 
     // Session control
@@ -40,7 +38,6 @@ pub fn scan_commands(input: &str) -> Option<Command> {
         "s" => scan_session_commands(subcommand),
         "u" => scan_user_commands(subcommand),
         _ => {
-            error!("Unknown command: '{}'", command);
             None
         }
     }
@@ -54,7 +51,6 @@ fn scan_session_commands(subcommand: &str) -> Option<Command> {
         "open" => Some(Command::OpenSession),
         "list" => Some(Command::ListSessions),
         _ => {
-            error!("Unknown session command: '{}'", subcommand);
             None
         }
     }
@@ -64,11 +60,10 @@ fn scan_user_commands(subcommand: &str) -> Option<Command> {
     match subcommand {
         "new" => Some(Command::NewUser),
         "delete" => Some(Command::DeleteUser),
-        "exit" => Some(Command::ExitUser),
-        "open" => Some(Command::OpenUser),
+        "logout" => Some(Command::LogoutUser),
+        "login" => Some(Command::LoginUser),
         "list" => Some(Command::ListUsers),
         _ => {
-            error!("Unknown user command: '{}'", subcommand);
             None
         }
     }

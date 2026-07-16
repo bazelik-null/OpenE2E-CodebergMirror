@@ -1,90 +1,84 @@
-use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHasher};
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD_NO_PAD;
-use serde_json::{Error, Value, from_value, to_value};
-use sha2::{Digest, Sha256};
-use vodozemac::olm::{Account, AccountPickle};
+use crate::backend::managers::user::User;
 
-pub struct User {
-    pub name: String,
-    account: Account,
-    key: [u8; 32], // Key for serialization
+pub struct UserManager {
+    users: Vec<User>,
+    current_user: Option<usize>, // Index of selected user, None if no selection
 }
 
-impl User {
-    /// Creates new account with keys and unique id
-    pub fn new(key_count: usize, name: &str, password: &str) -> Result<User, String> {
-        let mut account = Account::new();
-
-        // Generate one time keys for establishing sessions
-        account.generate_one_time_keys(key_count);
-
-        // Generate a fallback key (used when out of one time keys)
-        account.generate_fallback_key();
-
-        // Get key
-        let salt = hash_name_to_salt(name)?;
-        let key = derive_key_from_password(password, salt)?;
-
-        Ok(User {
-            name: name.to_string(),
-            account,
-            key,
-        })
-    }
-
-    /// Serializes user struct to encrypted JSON
-    pub fn serialize(&self) -> Result<Value, Error> {
-        let pickle = self.account.pickle().encrypt(&self.key);
-
-        to_value((self.name.clone(), pickle.to_string()))
-    }
-
-    /// Deserializes user struct from encrypted JSON
-    pub fn deserialize(json: Value, password: &str) -> Result<User, String> {
-        let serialized_user: (String, String) =
-            from_value(json).map_err(|error| error.to_string())?;
-
-        // Get username
-        let name = serialized_user.0;
-
-        // Get key
-        let salt = hash_name_to_salt(&name)?;
-        let key = derive_key_from_password(password, salt)?;
-
-        // Decrypt account data
-        let pickle = AccountPickle::from_encrypted(&serialized_user.1, &key)
-            .map_err(|error| error.to_string())?;
-        let account = Account::from_pickle(pickle);
-
-        Ok(User { name, account, key })
+impl Default for UserManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// Hashes the account name to create salt
-fn hash_name_to_salt(name: &str) -> Result<SaltString, String> {
-    let mut hasher = Sha256::new();
-    hasher.update(name.as_bytes());
-    let hash = hasher.finalize();
+impl UserManager {
+    pub fn new() -> UserManager {
+        UserManager {
+            users: vec![],
+            current_user: None,
+        }
+    }
 
-    let salt_bytes = &hash[..16];
-    let salt_b64 = BASE64_STANDARD_NO_PAD.encode(salt_bytes);
+    pub fn new_user(&mut self, name: &str, password: &str) -> Result<&User, String> {
+        let user = User::new(name, password)?;
 
-    SaltString::from_b64(&salt_b64).map_err(|error| error.to_string())
-}
+        self.users.push(user);
 
-pub fn derive_key_from_password(password: &str, salt: SaltString) -> Result<[u8; 32], String> {
-    let argon2 = Argon2::default();
+        Ok(self.users.last().unwrap())
+    }
 
-    let password_hash = argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|error| error.to_string())?;
+    pub fn delete_user(&mut self, name: &str) {
+        let removed_idx = self.users.iter().position(|u| u.name == name);
+        self.users.retain(|user| user.name != name);
 
-    // Extract the hash and convert to [u8; 32]
-    let hash_bytes = password_hash.hash.ok_or("No hash generated")?;
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&hash_bytes.as_bytes()[..32]);
+        // Clear selection if we deleted the current user
+        if let Some(idx) = removed_idx {
+            if self.current_user == Some(idx) {
+                self.current_user = None;
+            } else if let Some(curr) = self.current_user {
+                // Adjust index if a user before the current was removed
+                if idx < curr {
+                    self.current_user = Some(curr - 1);
+                }
+            }
+        }
+    }
 
-    Ok(key)
+    pub fn get_usernames(&self) -> Vec<&str> {
+        self.users.iter().map(|user| user.name.as_str()).collect()
+    }
+
+    pub fn select_user(&mut self, name: &str) -> Result<(), String> {
+        let current_user = self.users.iter().position(|s| s.name == name);
+
+        match current_user {
+            Some(current_user) => self.current_user = Some(current_user),
+            None => return Err(format!("User '{}' not found", name)),
+        }
+
+        Ok(())
+    }
+
+    pub fn deselect_user(&mut self) {
+        self.current_user = None;
+    }
+
+    pub fn get_current_user(&self) -> Option<&User> {
+        self.current_user.and_then(|idx| self.users.get(idx))
+    }
+
+    pub fn get_current_user_mut(&mut self) -> Option<&mut User> {
+        let idx = self.current_user?;
+        self.users.get_mut(idx)
+    }
+
+    // TODO
+    pub fn deserialize_users() -> Option<Vec<User>> {
+        None
+    }
+
+    // TODO
+    pub fn serialize_users() -> Option<Vec<User>> {
+        None
+    }
 }
