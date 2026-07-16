@@ -2,7 +2,7 @@ use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHasher};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD_NO_PAD;
-use serde_json::{Error, Value, from_value, to_value};
+use serde_json::{Value, from_value, to_value};
 use sha2::{Digest, Sha256};
 use vodozemac::olm::{Account, AccountPickle};
 
@@ -37,18 +37,23 @@ impl User {
     }
 
     /// Serializes user struct to encrypted JSON
-    pub fn serialize(&self) -> Result<Value, Error> {
+    pub fn serialize(&self) -> Result<Value, String> {
         // Encrypt account
         let pickle = self.account.pickle().encrypt(&self.key);
 
+        // Serialize sessions
+        let sessions = self
+            .session_manager
+            .serialize_sessions(&self.key)
+            .map_err_to_string()?;
+
         // Serialize user
-        // TODO: Serialize session manager
-        to_value((self.name.clone(), pickle.to_string()))
+        to_value((self.name.clone(), pickle.to_string(), sessions)).map_err_to_string()
     }
 
     /// Deserializes user struct from encrypted JSON
     pub fn deserialize(json: Value, password: &str) -> Result<User, String> {
-        let serialized_user: (String, String) = from_value(json).map_err_to_string()?;
+        let serialized_user: (String, String, Value) = from_value(json).map_err_to_string()?;
 
         // Get username
         let name = serialized_user.0;
@@ -61,10 +66,13 @@ impl User {
         let pickle = AccountPickle::from_encrypted(&serialized_user.1, &key).map_err_to_string()?;
         let account = Account::from_pickle(pickle);
 
-        // TODO: Deserialize session manager
+        // Deserialize sessions
+        let mut session_manager = SessionManager::default();
+        session_manager.deserialize_sessions(serialized_user.2, &key)?;
+
         Ok(User {
             name,
-            session_manager: SessionManager::default(),
+            session_manager,
             account,
             key,
         })

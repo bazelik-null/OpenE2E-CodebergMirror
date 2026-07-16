@@ -1,8 +1,9 @@
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD_NO_PAD;
+use serde_json::Value;
 use vodozemac::{
     Curve25519PublicKey,
-    olm::{Account, Message, OlmMessage, PreKeyMessage, Session, SessionConfig},
+    olm::{Account, Message, OlmMessage, PreKeyMessage, Session, SessionConfig, SessionPickle},
 };
 
 use crate::error_mapper::MapErrorToString;
@@ -12,9 +13,39 @@ pub struct SessionInstance {
     pub session: Session,
 }
 
+impl SessionInstance {
+    /// Serializes session to encrypted JSON
+    pub fn serialize(&self, key: &[u8; 32]) -> Result<Value, String> {
+        // Pickle the session
+        let pickle = self.session.pickle();
+
+        // Encrypt the pickle
+        let encrypted_pickle = pickle.encrypt(key);
+
+        // Serialize to JSON
+        serde_json::to_value((self.name.clone(), encrypted_pickle.to_string())).map_err_to_string()
+    }
+
+    /// Deserializes session from encrypted JSON
+    pub fn deserialize(json: Value, key: &[u8; 32]) -> Result<Self, String> {
+        // Parse the serialized data
+        let (name, encrypted_pickle_str): (String, String) =
+            serde_json::from_value(json).map_err_to_string()?;
+
+        // Decrypt the pickle
+        let pickle =
+            SessionPickle::from_encrypted(&encrypted_pickle_str, key).map_err_to_string()?;
+
+        // Restore the session from pickle
+        let session = Session::from_pickle(pickle);
+
+        Ok(SessionInstance { name, session })
+    }
+}
+
 pub struct SessionManager {
     sessions: Vec<SessionInstance>,
-    current_session: Option<usize>,
+    current_session: Option<String>,
 }
 
 impl Default for SessionManager {
@@ -149,18 +180,12 @@ impl SessionManager {
     }
 
     pub fn delete_session(&mut self, name: &str) {
-        let removed_idx = self.sessions.iter().position(|s| s.name == name);
-        self.sessions.retain(|session| session.name != name);
-
-        if let Some(idx) = removed_idx {
-            if self.current_session == Some(idx) {
-                self.current_session = None;
-            } else if let Some(curr) = self.current_session
-                && idx < curr
-            {
-                self.current_session = Some(curr - 1);
-            }
+        // Logout if deleted session is equal to current
+        if self.current_session.as_deref() == Some(name) {
+            self.current_session = None;
         }
+
+        self.sessions.retain(|session| session.name != name);
     }
 
     pub fn get_session_names(&self) -> Vec<&str> {
@@ -171,14 +196,12 @@ impl SessionManager {
     }
 
     pub fn select_session(&mut self, name: &str) -> Result<(), String> {
-        let current_session = self.sessions.iter().position(|s| s.name == name);
-
-        match current_session {
-            Some(current_session) => self.current_session = Some(current_session),
-            None => return Err(format!("Session '{}' not found", name)),
+        if self.sessions.iter().any(|s| s.name == name) {
+            self.current_session = Some(name.to_string());
+            Ok(())
+        } else {
+            Err(format!("Session '{}' not found", name))
         }
-
-        Ok(())
     }
 
     pub fn deselect_session(&mut self) {
@@ -186,14 +209,17 @@ impl SessionManager {
     }
 
     pub fn get_current_session(&self) -> Option<&SessionInstance> {
-        self.current_session.and_then(|idx| self.sessions.get(idx))
+        self.current_session
+            .as_ref()
+            .and_then(|name| self.sessions.iter().find(|s| &s.name == name))
     }
 
     pub fn get_current_session_mut(&mut self) -> Option<&mut SessionInstance> {
-        let idx = self.current_session?;
-        self.sessions.get_mut(idx)
+        let name = self.current_session.clone()?;
+        self.sessions.iter_mut().find(|s| s.name == name)
     }
 
+    /// Encrypt message using current session
     pub fn encrypt(&mut self, plaintext: &str) -> Result<String, String> {
         let session_instance = self
             .get_current_session_mut()
@@ -213,6 +239,7 @@ impl SessionManager {
         Ok(encrypted_b64)
     }
 
+    /// Decrypt message using current session
     pub fn decrypt(&mut self, ciphertext_b64: &str) -> Result<String, String> {
         let session_instance = self
             .get_current_session_mut()
@@ -234,5 +261,28 @@ impl SessionManager {
             .map_err_to_string()?;
 
         String::from_utf8(plaintext).map_err_to_string()
+    }
+
+    /// Serializes all sessions to encrypted JSON array
+    pub fn serialize_sessions(&self, key: &[u8; 32]) -> Result<Value, String> {
+        let serialized_sessions: Result<Vec<Value>, String> = self
+            .sessions
+            .iter()
+            .map(|session| session.serialize(key))
+            .collect();
+
+        serde_json::to_value(serialized_sessions?).map_err_to_string()
+    }
+
+    /// Deserializes all sessions from encrypted JSON array
+    pub fn deserialize_sessions(&mut self, json: Value, key: &[u8; 32]) -> Result<(), String> {
+        let serialized_sessions: Vec<Value> = serde_json::from_value(json).map_err_to_string()?;
+
+        self.sessions = serialized_sessions
+            .into_iter()
+            .map(|session_json| SessionInstance::deserialize(session_json, key))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(())
     }
 }

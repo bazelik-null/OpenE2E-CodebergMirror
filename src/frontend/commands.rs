@@ -2,18 +2,19 @@ pub enum Command {
     // Misc
     Exit,
     Help,
+    Conventions,
 
     // User control
     NewUser { name: String, password: String },
     DeleteUser { name: String },
     LogoutUser,
-    LoginUser { name: String },
+    LoginUser { name: String, password: String },
     ListUsers,
 
     // Session control
     NewSession { name: String },
     DeleteSession { name: String },
-    ExitSession,
+    CloseSession,
     OpenSession { name: String },
     ListSessions,
 
@@ -23,103 +24,101 @@ pub enum Command {
 }
 
 pub fn scan_commands(input: &str) -> Option<Command> {
-    let mut input_it = input.split_whitespace();
-    let command = input_it.next().unwrap_or("");
-    let subcommand = input_it.next().unwrap_or("");
-    let arguments: Vec<&str> = input_it.collect();
+    let tokens = parse_quoted_input(input);
+    let mut tokens_iter = tokens.iter().map(|s| s.as_str());
 
-    match command {
+    match tokens_iter.next()? {
         "exit" => Some(Command::Exit),
         "help" => Some(Command::Help),
+        "conv" => Some(Command::Conventions),
         "e" => {
-            if !subcommand.is_empty() {
-                Some(Command::Encrypt {
-                    text: subcommand.to_string(),
-                })
-            } else {
-                None
-            }
+            let text = tokens_iter.collect::<Vec<_>>().join(" ");
+            (!text.is_empty()).then_some(Command::Encrypt { text })
         }
         "d" => {
-            if !subcommand.is_empty() {
-                Some(Command::Decrypt {
-                    text: subcommand.to_string(),
-                })
-            } else {
-                None
-            }
+            let text = tokens_iter.collect::<Vec<_>>().join(" ");
+            (!text.is_empty()).then_some(Command::Decrypt { text })
         }
-        "s" => scan_session_commands(subcommand, &arguments),
-        "u" => scan_user_commands(subcommand, &arguments),
+        "s" => scan_subcommand(&mut tokens_iter, scan_session_commands),
+        "u" => scan_subcommand(&mut tokens_iter, scan_user_commands),
         _ => None,
     }
 }
 
-fn scan_session_commands(subcommand: &str, arguments: &[&str]) -> Option<Command> {
+fn scan_subcommand<F>(tokens: &mut dyn Iterator<Item = &str>, handler: F) -> Option<Command>
+where
+    F: Fn(&str, Vec<&str>) -> Option<Command>,
+{
+    let subcommand = tokens.next().unwrap_or("");
+    let arguments: Vec<&str> = tokens.collect();
+    handler(subcommand, arguments)
+}
+
+fn parse_quoted_input(input: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current_token = String::new();
+    let mut in_quotes = false;
+
+    for ch in input.chars() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ' ' | '\t' if !in_quotes => {
+                if !current_token.is_empty() {
+                    tokens.push(current_token.clone());
+                    current_token.clear();
+                }
+            }
+            _ => current_token.push(ch),
+        }
+    }
+
+    if !current_token.is_empty() {
+        tokens.push(current_token);
+    }
+
+    tokens
+}
+
+fn scan_session_commands(subcommand: &str, arguments: Vec<&str>) -> Option<Command> {
     match subcommand {
-        "new" => {
-            if !arguments.is_empty() {
-                Some(Command::NewSession {
-                    name: arguments[0].to_string(),
-                })
-            } else {
-                None
-            }
-        }
-        "delete" => {
-            if !arguments.is_empty() {
-                Some(Command::DeleteSession {
-                    name: arguments[0].to_string(),
-                })
-            } else {
-                None
-            }
-        }
-        "exit" => Some(Command::ExitSession),
-        "open" => {
-            if !arguments.is_empty() {
-                Some(Command::OpenSession {
-                    name: arguments[0].to_string(),
-                })
-            } else {
-                None
-            }
-        }
+        "new" => arguments.first().map(|&name| Command::NewSession {
+            name: name.to_string(),
+        }),
+        "delete" => arguments.first().map(|&name| Command::DeleteSession {
+            name: name.to_string(),
+        }),
+        "close" => Some(Command::CloseSession),
+        "open" => arguments.first().map(|&name| Command::OpenSession {
+            name: name.to_string(),
+        }),
         "list" => Some(Command::ListSessions),
         _ => None,
     }
 }
 
-fn scan_user_commands(subcommand: &str, arguments: &[&str]) -> Option<Command> {
+fn scan_user_commands(subcommand: &str, arguments: Vec<&str>) -> Option<Command> {
     match subcommand {
         "new" => {
-            if arguments.len() >= 2 {
-                Some(Command::NewUser {
-                    name: arguments[0].to_string(),
-                    password: arguments[1].to_string(),
-                })
-            } else {
-                None
-            }
+            let [name, password, ..] = arguments.as_slice() else {
+                return None;
+            };
+            Some(Command::NewUser {
+                name: name.to_string(),
+                password: password.to_string(),
+            })
         }
-        "delete" => {
-            if !arguments.is_empty() {
-                Some(Command::DeleteUser {
-                    name: arguments[0].to_string(),
-                })
-            } else {
-                None
-            }
-        }
+        "delete" => arguments.first().map(|&name| Command::DeleteUser {
+            name: name.to_string(),
+        }),
         "logout" => Some(Command::LogoutUser),
         "login" => {
-            if !arguments.is_empty() {
-                Some(Command::LoginUser {
-                    name: arguments[0].to_string(),
-                })
-            } else {
-                None
-            }
+            let [name, password, ..] = arguments.as_slice() else {
+                return None;
+            };
+            Some(Command::LoginUser {
+                name: name.to_string(),
+                password: password.to_string(),
+            })
         }
         "list" => Some(Command::ListUsers),
         _ => None,

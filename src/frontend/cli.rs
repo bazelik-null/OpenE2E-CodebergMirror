@@ -23,7 +23,7 @@ impl Default for Application {
 impl Application {
     pub fn new() -> Self {
         Self {
-            user_manager: UserManager::new(),
+            user_manager: UserManager::default(),
             should_exit: false,
         }
     }
@@ -46,6 +46,7 @@ impl Application {
         println!("{}", "### OpenE2E CLI interface v0.3 ###".cyan());
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
         println!("{}", "Type 'help' for available commands".cyan());
+        println!("{}", "Type 'conv' for conventions".cyan());
         println!();
     }
 
@@ -54,24 +55,25 @@ impl Application {
             return Ok(());
         }
 
-        let command =
-            scan_commands(input).ok_or("Unknown command. Type 'help' for available commands.")?;
+        let command = scan_commands(input)
+            .ok_or("Invalid command/argument. Type 'help' for available commands.")?;
 
         match command {
             Command::Exit => self.handle_exit(),
             Command::Help => self.display_help(),
+            Command::Conventions => self.display_conventions(),
             Command::Encrypt { text } => self.encrypt(&text)?,
             Command::Decrypt { text } => self.decrypt(&text)?,
             Command::NewUser { name, password } => self.user_creation(&name, &password)?,
             Command::DeleteUser { name } => self.user_deletion(&name)?,
             Command::ListUsers => self.users_list(),
-            Command::LoginUser { name } => self.user_login(&name)?,
+            Command::LoginUser { name, password } => self.user_login(&name, &password)?,
             Command::LogoutUser => self.user_logout()?,
             Command::NewSession { name } => self.session_creation(&name)?,
             Command::DeleteSession { name } => self.session_deletion(&name)?,
             Command::ListSessions => self.session_list()?,
             Command::OpenSession { name } => self.session_open(&name)?,
-            Command::ExitSession => self.session_close()?,
+            Command::CloseSession => self.session_close()?,
         }
 
         Ok(())
@@ -79,10 +81,11 @@ impl Application {
 
     fn user_creation(&mut self, name: &str, password: &str) -> Result<(), String> {
         info!("Creating user...");
-        let user = self.user_manager.new_user(name, password)?;
-        info!("User '{}' created successfully", user.name);
+        self.user_manager.new_user(name, password)?;
+        info!("User '{}' created successfully", name);
 
-        self.user_manager.select_user(name)?;
+        self.user_manager.login(name, password)?;
+        self.user_manager.autosave()?;
         println!();
 
         Ok(())
@@ -91,7 +94,9 @@ impl Application {
     fn user_deletion(&mut self, name: &str) -> Result<(), String> {
         self.user_manager.delete_user(name);
         info!("User '{}' deleted", name);
+        self.user_manager.autosave()?;
         println!();
+
         Ok(())
     }
 
@@ -110,17 +115,20 @@ impl Application {
         println!();
     }
 
-    fn user_login(&mut self, name: &str) -> Result<(), String> {
-        self.user_manager.select_user(name)?;
+    fn user_login(&mut self, name: &str, password: &str) -> Result<(), String> {
+        self.user_manager.login(name, password)?;
         info!("User '{}' selected", name);
         println!();
+
         Ok(())
     }
 
     fn user_logout(&mut self) -> Result<(), String> {
-        self.user_manager.deselect_user();
+        self.user_manager.logout();
         info!("Logged out");
+        self.user_manager.autosave()?;
         println!();
+
         Ok(())
     }
 
@@ -142,6 +150,7 @@ impl Application {
         }
 
         info!("Session '{}' created successfully", name);
+        self.user_manager.autosave()?;
         println!();
 
         Ok(())
@@ -155,6 +164,7 @@ impl Application {
 
         user.session_manager.delete_session(name);
         info!("Session '{}' deleted", name);
+        self.user_manager.autosave()?;
         println!();
 
         Ok(())
@@ -203,6 +213,7 @@ impl Application {
 
         user.session_manager.deselect_session();
         info!("Session closed");
+        self.user_manager.autosave()?;
         println!();
 
         Ok(())
@@ -217,8 +228,9 @@ impl Application {
             .ok_or("No user selected")?;
 
         let encrypted = user.session_manager.encrypt(text)?;
-        println!(">> {}", encrypted);
+        println!("{}", encrypted);
 
+        self.user_manager.autosave()?;
         println!();
 
         Ok(())
@@ -232,9 +244,10 @@ impl Application {
             .get_current_user_mut()
             .ok_or("No user selected")?;
 
-        let encrypted = user.session_manager.decrypt(text)?;
-        println!(">> {}", encrypted);
+        let decrypted = user.session_manager.decrypt(text)?;
+        println!("{}", decrypted);
 
+        self.user_manager.autosave()?;
         println!();
 
         Ok(())
@@ -242,6 +255,7 @@ impl Application {
 
     fn handle_exit(&mut self) {
         info!("Exiting application...");
+        let _ = self.user_manager.shutdown();
         self.should_exit = true;
     }
 
@@ -251,6 +265,7 @@ impl Application {
         println!("{}", "-".repeat(SECTION_WIDTH).grey());
         println!("  {} - Exit the application", "exit".cyan());
         println!("  {} - Show this help message", "help".cyan());
+        println!("  {} - Show conventions", "conv".cyan());
         println!();
         println!("{}", "User Management".yellow().bold());
         println!(
@@ -259,7 +274,7 @@ impl Application {
         );
         println!("  {} - Delete a user", "u delete <username>".cyan());
         println!("  {} - List all users", "u list".cyan());
-        println!("  {} - Login", "u login <username>".cyan());
+        println!("  {} - Login", "u login <username> <password>".cyan());
         println!("  {} - Logout", "u logout".cyan());
         println!();
         println!("{}", "Session Management".yellow().bold());
@@ -267,13 +282,48 @@ impl Application {
         println!("  {} - Delete a session", "s delete <session_name>".cyan());
         println!("  {} - List all sessions", "s list".cyan());
         println!("  {} - Open session", "s open <session_name>".cyan());
-        println!("  {} - Close session", "s exit".cyan());
+        println!("  {} - Close session", "s close".cyan());
         println!();
         println!("{}", "Chatting".yellow().bold());
         println!("  {} - Encrypt text", "e <text>".cyan());
         println!("  {} - Decrypt text", "d <text>".cyan());
         println!();
+        println!("{}", "Tip: You can use \"quotes\" to write names with whitespaces. Not required for encryption and decryption as all arguments fold into one".cyan());
     }
+
+    fn display_conventions(&self) {
+        println!();
+        println!("{}", "CONVENTIONS".yellow().bold());
+        println!("{}", "-".repeat(SECTION_WIDTH).grey());
+        println!(
+            "  {}",
+            "Follow these conventions to prevent session desync."
+                .cyan()
+        );
+        println!("  {}", "Send \"!\" to signal: intent of transmitting a message.".cyan());
+        println!("  {}", "Send \"?\" to signal: request a response.".cyan());
+        println!("  {}", "Send \".\" to signal: close the conversation.".cyan());
+        println!();
+        println!("{}", "Example exchange:".yellow());
+        println!("{}", "-".repeat(SECTION_WIDTH / 2).grey());
+
+        println!("A:  {}", "!".red());
+        println!("A:  {}", "[text]".grey());
+        println!("A:  {}", "?".green());
+        println!();
+        println!("B:  {}", "!".red());
+        println!("B:  {}", "[response]".grey());
+        println!("B:  {}", "!".red());
+        println!("B:  {}", "[text]".grey());
+        println!("B:  {}", "?".green());
+        println!();
+        println!("A:  {}", "!".red());
+        println!("A:  {}", "[text]".grey());
+        println!("A:  {}", ".".blue());
+
+        println!();
+    }
+
 
     fn display_section(&self, title: &str) {
         println!();

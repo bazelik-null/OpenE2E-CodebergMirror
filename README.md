@@ -74,7 +74,7 @@ Enable obfuscation to store messages as media files instead of plaintext:
 - [x] CLI prototype
 - [x] Core encryption and key exchange
 - [x] Encrypted message send/receive
-- [ ] Local session storage
+- [x] Local session storage
 - [ ] Message DB storage
 - [ ] CLI chat app, demo release
 - [ ] GUI chat app with Slint
