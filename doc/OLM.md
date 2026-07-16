@@ -1,6 +1,6 @@
 # End-to-End Encryption with OLM
 
-**Languages:** [English](doc/OLM.md) | [Русский](doc/OLM.ru.md)
+**Languages:** [English](/doc/OLM.md) | [Русский](/doc/OLM.ru.md)
 
 # What is OLM?
 

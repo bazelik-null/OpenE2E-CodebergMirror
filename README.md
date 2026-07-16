@@ -1,6 +1,6 @@
 <div align="center">
 <h1> OpenE2E </h1>
-<img src="doc/img/logo.png">
+<img src="/doc/img/logo.png">
 </div>
 
 > [!WARNING]
@@ -8,13 +8,13 @@
 > Under development. Not ready for use yet.
 > Check [Roadmap](#roadmap).
 
-**Languages:** [English](README.md) | [Русский](doc/README.ru.md)
+**Languages:** [English](/README.md) | [Русский](/doc/README.ru.md)
 
 # Overview
 
 OpenE2E provides a simple, chat-like interface with **end-to-end encryption (E2E) and Perfect Forward Secrecy (PFS)** based on **Matrix's** OLM, allowing you to communicate securely over insecure communication channels.
 
-More information about encryption algorithm and it's inner workings: [OLM.md](doc/OLM.md)
+More information about encryption algorithm and it's inner workings: [OLM.md](/doc/OLM.md)
 
 # Features
 

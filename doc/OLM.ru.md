@@ -1,6 +1,6 @@
 # Сквозное шифрование с OLM
 
-**Languages:** [English](doc/OLM.md) | [Русский](doc/OLM.ru.md)
+**Languages:** [English](/doc/OLM.md) | [Русский](/doc/OLM.ru.md)
 
 # Что такое OLM?
 
