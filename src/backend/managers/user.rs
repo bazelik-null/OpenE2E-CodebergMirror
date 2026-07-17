@@ -9,103 +9,129 @@ use vodozemac::olm::{Account, AccountPickle};
 use crate::backend::managers::session_manager::SessionManager;
 use crate::error_mapper::MapErrorToString;
 
+const SALT_HASH_LENGTH: usize = 16;
+const KEY_LENGTH: usize = 32;
+
+// User
+
 pub struct User {
     pub name: String,
     pub account: Account,
     pub session_manager: SessionManager,
-    key: [u8; 32], // Key for serialization
+    pub encryption_key: [u8; 32],
 }
 
 impl User {
-    /// Creates new account and unique id
-    pub fn new(name: &str, password: &str) -> Result<User, String> {
+    pub fn new(name: &str, password: &str) -> Result<Self, String> {
         let mut account = Account::new();
-
-        // Generate a fallback key (used when out of one time keys)
         account.generate_fallback_key();
 
-        // Get key
-        let salt = hash_name_to_salt(name)?;
-        let key = derive_key_from_password(password, salt)?;
+        let encryption_key = Self::derive_encryption_key(name, password)?;
 
-        Ok(User {
+        Ok(Self {
             name: name.to_string(),
             session_manager: SessionManager::default(),
             account,
-            key,
+            encryption_key,
         })
     }
 
-    /// Serializes user struct to encrypted JSON
+    // Persistence
+
+    /// Serializes the user to encrypted JSON
+    /// Encrypts the Olm account and session data using the derived encryption key
     pub fn serialize(&self) -> Result<Value, String> {
-        // Encrypt account
-        let pickle = self.account.pickle().encrypt(&self.key);
+        let account_pickle = self.encrypt_account()?;
+        let sessions_data = self.serialize_sessions()?;
 
-        // Serialize sessions
-        let sessions = self
-            .session_manager
-            .serialize_sessions(&self.key)
-            .map_err_to_string()?;
-
-        // Serialize user
-        to_value((self.name.clone(), pickle.to_string(), sessions)).map_err_to_string()
+        to_value((self.name.clone(), account_pickle, sessions_data)).map_err_to_string()
     }
 
-    /// Deserializes user struct from encrypted JSON
-    pub fn deserialize(json: Value, password: &str) -> Result<User, String> {
-        let serialized_user: (String, String, Value) = from_value(json).map_err_to_string()?;
+    /// Deserializes a user from encrypted JSON
+    /// Verifies the password by deriving the encryption key and attempting to decrypt the account data
+    pub fn deserialize(json: Value, password: &str) -> Result<Self, String> {
+        let (name, encrypted_account, sessions_data): (String, String, Value) =
+            from_value(json).map_err_to_string()?;
 
-        // Get username
-        let name = serialized_user.0;
+        let encryption_key = Self::derive_encryption_key(&name, password)?;
 
-        // Get key
-        let salt = hash_name_to_salt(&name)?;
-        let key = derive_key_from_password(password, salt)?;
-
-        // Decrypt account data
-        let pickle = AccountPickle::from_encrypted(&serialized_user.1, &key).map_err_to_string()?;
-        let account = Account::from_pickle(pickle);
-
-        // Deserialize sessions
+        let account = Self::decrypt_account(&encrypted_account, &encryption_key)?;
         let mut session_manager = SessionManager::default();
-        session_manager.deserialize_sessions(serialized_user.2, &key)?;
+        session_manager.import_sessions(sessions_data, &encryption_key)?;
 
-        Ok(User {
+        Ok(Self {
             name,
             session_manager,
             account,
-            key,
+            encryption_key,
         })
+    }
+
+    /// Encrypts the account pickle using the encryption key
+    fn encrypt_account(&self) -> Result<String, String> {
+        let pickle = self.account.pickle().encrypt(&self.encryption_key);
+        Ok(pickle.to_string())
+    }
+
+    /// Decrypts the account pickle using the encryption key
+    fn decrypt_account(encrypted_pickle: &str, key: &[u8; 32]) -> Result<Account, String> {
+        let pickle = AccountPickle::from_encrypted(encrypted_pickle, key).map_err_to_string()?;
+        Ok(Account::from_pickle(pickle))
+    }
+
+    /// Serializes all sessions using the encryption key
+    fn serialize_sessions(&self) -> Result<Value, String> {
+        self.session_manager.export_sessions(&self.encryption_key)
+    }
+
+    // Cryptography
+
+    /// Derives an encryption key from the user's name and password
+    /// Uses the name to generate a deterministic salt via SHA-256 hashing, then applies Argon2 to derive a 32-byte encryption key
+    fn derive_encryption_key(name: &str, password: &str) -> Result<[u8; 32], String> {
+        let salt = generate_salt_from_name(name)?;
+        derive_key_from_password(password, salt)
+    }
+
+    // Messaging
+
+    /// Decrypts ciphertext using the active session
+    pub fn encrypt(&mut self, plaintext: &str) -> Result<String, String> {
+        self.session_manager.encrypt(plaintext)
+    }
+
+    /// Decrypts ciphertext
+    pub fn decrypt(&mut self, ciphertext_b64: &str) -> Result<String, String> {
+        self.session_manager.decrypt(ciphertext_b64)
     }
 }
 
-/// Hashes the account name to create salt
-fn hash_name_to_salt(name: &str) -> Result<SaltString, String> {
-    // Hash name
-    let hash = Sha256::digest(name);
+// Utilities
 
-    // Get first 16 bytes and convert to base64
-    let salt_bytes = &hash[..16];
+/// Generates a deterministic salt from a username using SHA-256
+fn generate_salt_from_name(name: &str) -> Result<SaltString, String> {
+    let hash = Sha256::digest(name.as_bytes());
+    let salt_bytes = &hash[..SALT_HASH_LENGTH];
     let salt_b64 = BASE64_STANDARD_NO_PAD.encode(salt_bytes);
 
-    // Construct salt from base 64
-    SaltString::from_b64(&salt_b64).map_err_to_string()
+    SaltString::from_b64(&salt_b64)
+        .map_err(|e| format!("Failed to create salt from username: {}", e))
 }
 
-/// Hashes password with Argon2 and given salt
+/// Derives a 32-byte encryption key from a password using Argon2.
 pub fn derive_key_from_password(password: &str, salt: SaltString) -> Result<[u8; 32], String> {
-    // Set up Argon2 hasher
     let argon2 = Argon2::default();
 
-    // Hash password
     let password_hash = argon2
         .hash_password(password.as_bytes(), &salt)
         .map_err_to_string()?;
 
-    // Extract the hash and convert to [u8; 32]
-    let hash_bytes = password_hash.hash.ok_or("No hash generated")?;
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&hash_bytes.as_bytes()[..32]);
+    let hash_bytes = password_hash
+        .hash
+        .ok_or_else(|| "Argon2 failed to generate hash".to_string())?;
+
+    let mut key = [0u8; KEY_LENGTH];
+    key.copy_from_slice(&hash_bytes.as_bytes()[..KEY_LENGTH]);
 
     Ok(key)
 }

@@ -43,7 +43,7 @@ impl Application {
     fn display_welcome(&self) {
         println!();
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
-        println!("{}", "### OpenE2E CLI interface v0.3 ###".cyan());
+        println!("{}", "### OpenE2E CLI interface v0.4 ###".cyan());
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
         println!("{}", "Type 'help' for available commands".cyan());
         println!("{}", "Type 'conv' for conventions".cyan());
@@ -227,7 +227,7 @@ impl Application {
             .get_current_user_mut()
             .ok_or("No user selected")?;
 
-        let encrypted = user.session_manager.encrypt(text)?;
+        let encrypted = user.encrypt(text)?;
         println!("{}", encrypted);
 
         self.user_manager.autosave()?;
@@ -244,7 +244,7 @@ impl Application {
             .get_current_user_mut()
             .ok_or("No user selected")?;
 
-        let decrypted = user.session_manager.decrypt(text)?;
+        let decrypted = user.decrypt(text)?;
         println!("{}", decrypted);
 
         self.user_manager.autosave()?;
@@ -297,12 +297,17 @@ impl Application {
         println!("{}", "-".repeat(SECTION_WIDTH).grey());
         println!(
             "  {}",
-            "Follow these conventions to prevent session desync."
-                .cyan()
+            "Follow these conventions to prevent session desync.".cyan()
         );
-        println!("  {}", "Send \"!\" to signal: intent of transmitting a message.".cyan());
+        println!(
+            "  {}",
+            "Send \"!\" to signal: intent of transmitting a message.".cyan()
+        );
         println!("  {}", "Send \"?\" to signal: request a response.".cyan());
-        println!("  {}", "Send \".\" to signal: close the conversation.".cyan());
+        println!(
+            "  {}",
+            "Send \".\" to signal: close the conversation.".cyan()
+        );
         println!();
         println!("{}", "Example exchange:".yellow());
         println!("{}", "-".repeat(SECTION_WIDTH / 2).grey());
@@ -323,7 +328,6 @@ impl Application {
 
         println!();
     }
-
 
     fn display_section(&self, title: &str) {
         println!();
@@ -364,7 +368,7 @@ fn create_inbound_session(user: &mut User, name: &str) -> Result<(), String> {
     let first_message = prompt_input();
     println!();
 
-    user.session_manager.establish_session_from_message(
+    user.session_manager.establish_in_session(
         &mut user.account,
         name,
         &remote_keys,
@@ -386,7 +390,7 @@ fn create_outbound_session(user: &mut User, name: &str) -> Result<(), String> {
     println!();
 
     user.session_manager
-        .establish_session(&mut user.account, name, &remote_keys)?;
+        .establish_out_session(&mut user.account, name, &remote_keys)?;
     user.session_manager.select_session(name)?;
 
     println!(
