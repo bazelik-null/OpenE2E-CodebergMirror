@@ -5,35 +5,42 @@
 
 > [!WARNING]
 >
-> Under development. Not ready for use yet.
-> Check [Roadmap](#roadmap).
+> Under active development. Not ready for production use yet.
+> See the [Roadmap](#roadmap).
 
 **Languages:** [English](README.md) | [Русский](doc/README.ru.md)
 
 # Overview
 
-OpenE2E provides a simple, chat-like interface with **end-to-end encryption (E2E) and Perfect Forward Secrecy (PFS)** based on **Matrix's** OLM, allowing you to communicate securely over insecure communication channels.
+OpenE2E is a manual secure chat app for exchanging encrypted messages over any channel, from SMS and email to messengers, social platforms, or other untrusted channels.
 
-More information about encryption algorithm and it's inner workings: [OLM.md](doc/OLM.md)
+The app handles encryption and decryption locally, while you move encrypted payloads between people using whatever channel is available. This makes it useful anywhere direct secure transport is unavailable or inconvenient.
+
+OpenE2E uses **Matrix OLM** via the `voldozemac` library, with **AES-256-GCM** for message encryption and **end-to-end encryption with Perfect Forward Secrecy (PFS)**.
+
+More information about the encryption model and internal design: [OLM.md](doc/OLM.md)
 
 # Features
 
-- **End-to-End Encryption** - All messages are encrypted with asymmetric cryptography and PFS
-- **Easy Key Exchange** - No complex setup. Just generate ephemeral public keys, share via any channel, and establish a secure session
-- **Chat-Like Interface** - Intuitive messaging UI built with **Slint**
-- **Local Message Storage** - All messages are stored locally in readable chat format
-- **Obfuscation Mode** - Optionally save messages as media files to avoid ML analysis and suspicious patterns
-- **Works Over Untrusted Channels** - Send encrypted messages through government messengers, email, SMS, or any public platform
-- **Built in Rust** - Memory safe and blazingly fast
+- **Manual Secure Chat** - Exchange encrypted messages by copy-pasting them through any channel
+- **End-to-End Encryption** - Messages are encrypted locally and can only be decrypted by the intended recipient
+- **Perfect Forward Secrecy** - Past messages stay protected even if later keys are compromised
+- **Works Over Any Channel** - SMS, email, messengers, government platforms, and other public channels
+- **Local Storage** - All data stays on your device
+- **Encrypted Storage** - Messages and sessions are stored locally in an encrypted database [Work in progress]
+- **Chat-Like Interface** - A clean UI built with **Slint**  [Work in progress]
+- **Rust-Based** - Memory safe and blazingly fast
 
 # How It Works
 
-1. **Create a Session** - Start a new conversation session in the app
-2. **Exchange Keys** - Generate and copy your ephemeral public key, share it with your contact
-3. **Receive Key** - Paste your contact's public key into the app to establish the secure session
-4. **Send Messages** - Type your message, copy the encrypted output, and send it through any messenger
-5. **Receive Messages** - Paste received encrypted messages into the app to decrypt and read them
-6. **View History** - All decrypted messages are displayed in a readable chat interface
+1. **Create a Session** - Start a new conversation in the app
+2. **Exchange Public Keys** - Generate your ephemeral public key and share it with your contact by any channel
+3. **Receive Their Key** - Paste your contact's public key into the app to establish the session
+4. **Write a Message** - Enter your message in the app
+5. **Encrypt and Copy** - The app encrypts the message locally and gives you the ciphertext to send anywhere
+6. **Receive Ciphertext** - Paste the encrypted message from your contact into the app
+7. **Decrypt Locally** - The app decrypts it on your device and shows it in a readable chat view
+8. **Continue the Conversation** - Repeat the same process for ongoing secure communication
 
 # Installation
 
@@ -47,27 +54,26 @@ cargo build --release
 ```
 
 ### Pre-built binaries
-**Work in progress.**
+**Work in progress**
 
 # Security Features
 
-- **Perfect Forward Secrecy (PFS)** - OLM's Double Ratchet algorithm ensures past messages remain secure even if long-term keys are compromised
-- **Asymmetric Encryption** - Public-key cryptography prevents eavesdropping
-- **Local Storage Only** - No cloud sync, all data stays on your device
-- **Untrusted Channel Resistant** - Messages can be sent through any public platform without additional setup
+- **Perfect Forward Secrecy (PFS)** - OLM's ratchet-based design limits the impact of key compromise
+- **End-to-End Encryption** - Only the two endpoints can read message contents
+- **Local Storage Only** - No cloud sync, no server-side message storage
+- **Manual Key Exchange** - No automatic trust assumptions
+- **Channel Agnostic** - Encrypted data can travel through almost any medium
 
-### Obfuscation Mode
+### Local Data Protection
 
-Enable obfuscation to store messages as media files instead of plaintext:
-- Prevents automated analysis of message patterns
-- Maintains plausible deniability
-- Access messages only through the app
+Messages and sessions are stored locally in RocksDB. Storage encryption is **[Work in progress]**.
 
 # Limitations
 
-- Requires manual key exchange (no automatic key distribution)
-- Messages must be manually copied and pasted between channels
+- Requires manual key exchange
+- Messages must be copied and pasted between channels
 - No multi-device support
+- Not yet ready for production use
 
 # Roadmap
 

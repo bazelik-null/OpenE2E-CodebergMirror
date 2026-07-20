@@ -108,19 +108,21 @@ impl AutosaveWorker {
         }
 
         if let Some(data) = pending_data.take()
-            && let Err(e) = Self::write_to_disk(filepath, &data) {
-                error!("Autosave failed: {}", e);
-                // Re-queue data for retry
-                *pending_data = Some(data);
-            }
+            && let Err(e) = Self::write_to_disk(filepath, &data)
+        {
+            error!("Autosave failed: {}", e);
+            // Re-queue data for retry
+            *pending_data = Some(data);
+        }
     }
 
     /// Performs a final save before shutdown
     fn perform_final_save(filepath: &str, pending_data: Option<Value>) {
         if let Some(data) = pending_data
-            && let Err(e) = Self::write_to_disk(filepath, &data) {
-                error!("Final autosave before shutdown failed: {}", e);
-            }
+            && let Err(e) = Self::write_to_disk(filepath, &data)
+        {
+            error!("Final autosave before shutdown failed: {}", e);
+        }
     }
 
     // Disk I/O
