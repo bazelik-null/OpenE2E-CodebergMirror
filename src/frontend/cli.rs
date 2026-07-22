@@ -37,7 +37,7 @@ impl Application {
     fn display_welcome(&self) {
         println!();
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
-        println!("{}", "### OpenE2E CLI interface v0.4 ###".cyan());
+        println!("{}", "### OpenE2E CLI interface v0.5 ###".cyan());
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
         println!("{}", "Type 'help' for available commands".cyan());
         println!("{}", "Type 'conv' for conventions".cyan());
