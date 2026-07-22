@@ -42,9 +42,17 @@ OpenE2E использует **Matrix OLM** через библиотеку `vol
 7. **Расшифруйте локально** - Приложение расшифровывает сообщение на вашем устройстве и показывает его в удобном виде
 8. **Продолжайте диалог** - Повторяйте процесс для дальнейшего общения
 
+I'd be happy to translate this installation guide to Russian for your README. Here's the translation:
+
 # Установка
 
-### Сборка из исходников
+## Установка из исходного кода
+
+### Сборка из исходника
+
+**Требования:**
+- LLVM Clang
+- Rust
 
 ```bash
 git clone https://codeberg.org/bazelik-dev/OpenE2E.git
@@ -53,8 +61,17 @@ cargo build --release
 ./target/release/OpenE2E
 ```
 
-### Готовые бинарники
-**В разработке.**
+## Установка из предскомпилированных бинарников
+
+### Установка
+
+- Перейдите на страницу [Releases](https://codeberg.org/bazelik-dev/OpenE2E/releases) и скачайте последний бинарник
+
+### Проверка
+
+- Скачайте файл подписи `.asc` со вкладки releases.
+- Проверьте подпись: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E.asc OpenE2E`
+- Ключ должен совпадать с ключом опубликованным по адресу: https://keys.openpgp.org/vks/v1/by-fingerprint/C4C5BDC6C5E4C96CF12B3E85B7BBEB3BC5439F72
 
 # Безопасность
 
@@ -85,7 +102,7 @@ cargo build --release
 - [x] Локальное хранение сеансов
 - [x] Хранение сообщений в БД
 - [x] Русская локализация
-- [ ] CLI-чат-приложение, демо-релиз
+- [x] CLI-чат-приложение, демо-релиз
 - [ ] GUI-чат-приложение на Slint
 - [ ] Режим маскировки
 - [ ] Пакетирование и релизные сборки

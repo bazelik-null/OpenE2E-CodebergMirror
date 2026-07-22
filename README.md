@@ -44,7 +44,13 @@ More information about the encryption model and internal design: [OLM.md](doc/OL
 
 # Installation
 
+## Installation from source
+
 ### Build from Source
+
+**Requirements:**
+- LLVM Clang
+- Rust
 
 ```bash
 git clone https://codeberg.org/bazelik-dev/OpenE2E.git
@@ -53,8 +59,18 @@ cargo build --release
 ./target/release/OpenE2E
 ```
 
-### Pre-built binaries
-**Work in progress**
+## Installation from pre-built binaries
+
+### Installation
+
+- Go to [Releases](https://codeberg.org/bazelik-dev/OpenE2E/releases) and download latest binary
+
+### Verification
+
+- Download `.asc` signature file from releases tab.
+- Verify: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E.asc OpenE2E`
+- Key should match key published at: https://keys.openpgp.org/vks/v1/by-fingerprint/C4C5BDC6C5E4C96CF12B3E85B7BBEB3BC5439F72
+
 
 # Security Features
 
@@ -85,7 +101,7 @@ All encryption keys are derived from your user password and stored in memory dur
 - [x] Local session storage
 - [x] Message DB storage
 - [x] Rus localisation
-- [ ] CLI chat app, demo release
+- [x] CLI chat app, demo release
 - [ ] GUI chat app with Slint
 - [ ] Obfuscation mode
 - [ ] Packaging and release builds
