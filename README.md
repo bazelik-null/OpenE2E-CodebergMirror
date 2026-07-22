@@ -81,7 +81,7 @@ Messages and sessions are stored locally in RocksDB. Storage encryption is **[Wo
 - [x] Core encryption and key exchange
 - [x] Encrypted message send/receive
 - [x] Local session storage
-- [ ] Message DB storage
+- [x] Message DB storage
 - [ ] CLI chat app, demo release
 - [ ] GUI chat app with Slint
 - [ ] Obfuscation mode

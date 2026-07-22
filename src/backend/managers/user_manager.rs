@@ -1,7 +1,10 @@
+use colorize::AnsiColor;
+use rand::RngExt;
 use std::time::Duration;
 
 use crate::backend::managers::storage_manager::{BackgroundWorker, WorkerHandle};
-use crate::backend::managers::user::{SerializedUserTurple, User};
+use crate::backend::objects::message::Message;
+use crate::backend::objects::user::{SerializedUserTurple, User};
 use crate::error_mapper::MapErrorToString;
 
 // SerializedUser
@@ -90,6 +93,128 @@ impl UserManager {
     /// Retrieves all usernames
     pub fn get_usernames(&self) -> Vec<&str> {
         self.users.iter().map(|user| user.name.as_str()).collect()
+    }
+
+    // Messaging
+
+    /// Decrypts ciphertext using the active session
+    pub fn encrypt(&mut self, plaintext: &str) -> Result<String, String> {
+        let user = self
+            .get_current_user_mut()
+            .ok_or_else(|| "No user selected".to_string())?;
+        let session_name = user
+            .session_manager
+            .get_current_session()
+            .ok_or_else(|| "No session selected".to_string())?
+            .name
+            .clone();
+
+        // Encrypt message for network with OLM
+        let net_encrypted = user.encrypt(plaintext)?;
+
+        // Encrypt message for DB with AES-256-GCM
+        let db_encrypted = Message::encrypt(&user.encryption_key, &user.name, plaintext)?;
+
+        // Generate random message ID
+        let mut rng = rand::rng();
+        let message_id = rng.random::<u32>().to_string();
+
+        // Save encrypted message to database
+        let db = self.db_handle.worker();
+        db.save_message(&message_id, &session_name, &db_encrypted)?;
+
+        Ok(net_encrypted)
+    }
+
+    /// Decrypts ciphertext using the active session and saves to database
+    pub fn decrypt(&mut self, ciphertext_b64: &str) -> Result<String, String> {
+        let user = self
+            .get_current_user_mut()
+            .ok_or_else(|| "No user selected".to_string())?;
+        let session_name = user
+            .session_manager
+            .get_current_session()
+            .ok_or_else(|| "No session selected".to_string())?
+            .name
+            .clone();
+
+        // Decrypt message from network with OLM
+        let net_decrypted = user.decrypt(ciphertext_b64)?;
+
+        // Encrypt decrypted message for DB with AES-256-GCM
+        let db_encrypted = Message::encrypt(&user.encryption_key, &session_name, &net_decrypted)?;
+
+        // Generate random message ID
+        let mut rng = rand::rng();
+        let message_id = rng.random::<u32>().to_string();
+
+        // Save encrypted message to database
+        let db = self.db_handle.worker();
+        db.save_message(&message_id, &session_name, &db_encrypted)?;
+
+        Ok(net_decrypted)
+    }
+
+    /// Retrieves all messages from the current session, sorts by timestamp, and displays them
+    pub fn get_session_messages(&self) -> Result<String, String> {
+        // Get session name and encryption key
+        let (session_name, encryption_key) = {
+            let user = self
+                .get_current_user()
+                .ok_or_else(|| "No user selected".to_string())?;
+            let session_name = user
+                .session_manager
+                .get_current_session()
+                .ok_or_else(|| "No session selected".to_string())?
+                .name
+                .clone();
+            let encryption_key = user.encryption_key;
+            (session_name, encryption_key)
+        };
+
+        // Retrieve messages from DB
+        let db = self.db_handle.worker();
+        let encrypted_messages = db.get_messages_by_session(&session_name)?;
+
+        // Decrypt all messages
+        let mut decrypted_messages = Vec::new();
+        for encrypted_bytes in encrypted_messages {
+            match Message::decrypt(&encryption_key, &encrypted_bytes) {
+                Ok(msg) => {
+                    decrypted_messages.push(msg);
+                }
+                Err(e) => {
+                    eprintln!("Failed to decrypt message: {}", e);
+                }
+            }
+        }
+
+        // Sort messages by timestamp in ascending order
+        decrypted_messages.sort_by_key(|msg| msg.timestamp);
+
+        // Format each message
+        let formatted_messages: Vec<String> = decrypted_messages
+            .iter()
+            .map(|msg| {
+                // Convert Unix timestamp to readable format
+                let datetime = chrono::DateTime::<chrono::Utc>::from(
+                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(msg.timestamp),
+                );
+                let time_str = datetime.format("%Y-%m-%d %H:%M:%S").to_string();
+
+                // Get plaintext from decrypted data
+                let plaintext = String::from_utf8_lossy(&msg.data).to_string();
+
+                format!(
+                    "{}: {}: {}",
+                    time_str.b_grey(),
+                    msg.sender.clone().cyan(),
+                    plaintext.grey()
+                )
+            })
+            .collect();
+
+        Ok(formatted_messages.join("\n"))
     }
 
     // Authentication

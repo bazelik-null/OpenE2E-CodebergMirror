@@ -2,8 +2,8 @@ use colorize::AnsiColor;
 use log::{error, info};
 use std::io::{self, Write};
 
-use crate::backend::managers::user::User;
 use crate::backend::managers::user_manager::UserManager;
+use crate::backend::objects::user::User;
 use crate::frontend::commands::{Command, scan_commands};
 
 const HEADER_WIDTH: usize = 34;
@@ -58,6 +58,7 @@ impl Application {
             Command::Conventions => self.display_conventions(),
             Command::Encrypt { text } => self.encrypt(&text)?,
             Command::Decrypt { text } => self.decrypt(&text)?,
+            Command::History => self.history()?,
             Command::NewUser { name, password } => self.user_creation(&name, &password)?,
             Command::DeleteUser { name } => self.user_deletion(&name)?,
             Command::ListUsers => self.users_list(),
@@ -216,12 +217,7 @@ impl Application {
     fn encrypt(&mut self, text: &str) -> Result<(), String> {
         println!();
 
-        let user = self
-            .user_manager
-            .get_current_user_mut()
-            .ok_or("No user selected")?;
-
-        let encrypted = user.encrypt(text)?;
+        let encrypted = self.user_manager.encrypt(text)?;
         println!("{}", encrypted);
 
         self.user_manager.autosave()?;
@@ -233,16 +229,20 @@ impl Application {
     fn decrypt(&mut self, text: &str) -> Result<(), String> {
         println!();
 
-        let user = self
-            .user_manager
-            .get_current_user_mut()
-            .ok_or("No user selected")?;
-
-        let decrypted = user.decrypt(text)?;
+        let decrypted = self.user_manager.decrypt(text)?;
         println!("{}", decrypted);
 
         self.user_manager.autosave()?;
         println!();
+
+        Ok(())
+    }
+
+    fn history(&self) -> Result<(), String> {
+        self.display_section("Message history");
+
+        let messages = self.user_manager.get_session_messages()?;
+        println!("{}", messages);
 
         Ok(())
     }
@@ -285,6 +285,7 @@ impl Application {
         println!("{}", "Chatting".yellow().bold());
         println!("  {} - Encrypt text", "e <text>".cyan());
         println!("  {} - Decrypt text", "d <text>".cyan());
+        println!("  {} - Show history", "history".cyan());
         println!();
         println!("{}", "Tip: You can use \"quotes\" to write names with whitespaces. Not required for encryption and decryption as all arguments fold into one".cyan());
     }

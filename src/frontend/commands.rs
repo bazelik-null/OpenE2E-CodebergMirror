@@ -21,6 +21,7 @@ pub enum Command {
     // Message control
     Encrypt { text: String },
     Decrypt { text: String },
+    History,
 }
 
 pub fn scan_commands(input: &str) -> Option<Command> {
@@ -39,6 +40,7 @@ pub fn scan_commands(input: &str) -> Option<Command> {
             let text = tokens_iter.collect::<Vec<_>>().join(" ");
             (!text.is_empty()).then_some(Command::Decrypt { text })
         }
+        "history" => Some(Command::History),
         "s" => scan_subcommand(&mut tokens_iter, scan_session_commands),
         "u" => scan_subcommand(&mut tokens_iter, scan_user_commands),
         _ => None,
