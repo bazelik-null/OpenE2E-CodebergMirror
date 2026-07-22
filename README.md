@@ -27,7 +27,7 @@ More information about the encryption model and internal design: [OLM.md](doc/OL
 - **Perfect Forward Secrecy** - Past messages stay protected even if later keys are compromised
 - **Works Over Any Channel** - SMS, email, messengers, government platforms, and other public channels
 - **Local Storage** - All data stays on your device
-- **Encrypted Storage** - Messages and sessions are stored locally in an encrypted database [Work in progress]
+- **Encrypted Storage** - Messages and sessions are stored locally in an encrypted with AES-256-GCM database
 - **Chat-Like Interface** - A clean UI built with **Slint**  [Work in progress]
 - **Rust-Based** - Memory safe and blazingly fast
 
@@ -64,15 +64,17 @@ cargo build --release
 - **Manual Key Exchange** - No automatic trust assumptions
 - **Channel Agnostic** - Encrypted data can travel through almost any medium
 
-### Local Data Protection
+### Data Protection
 
-Messages and sessions are stored locally in RocksDB. Storage encryption is **[Work in progress]**.
+Messages and sessions are stored locally in RocksDB, AES-256-GCM encrypts all message data at rest in RocksDB and AES-CBC-HMAC encrypts all sessions and accounts data. Each message uses a randomly generated 12-byte nonce to ensure ciphertext uniqueness.
+
+All encryption keys are derived from your user password and stored in memory during the session. Keys are never written to disk or persisted after logout.
 
 # Limitations
 
 - Requires manual key exchange
 - Messages must be copied and pasted between channels
-- No multi-device support
+- No multi-device support (DB must be manually shared)
 - Not yet ready for production use
 
 # Roadmap
