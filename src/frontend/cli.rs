@@ -14,18 +14,12 @@ pub struct Application {
     should_exit: bool,
 }
 
-impl Default for Application {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Application {
-    pub fn new() -> Self {
-        Self {
-            user_manager: UserManager::default(),
+    pub fn new() -> Result<Self, String> {
+        Ok(Self {
+            user_manager: UserManager::new()?,
             should_exit: false,
-        }
+        })
     }
 
     pub fn main_loop(&mut self) {
@@ -92,7 +86,7 @@ impl Application {
     }
 
     fn user_deletion(&mut self, name: &str) -> Result<(), String> {
-        self.user_manager.delete_user(name);
+        self.user_manager.delete_user(name)?;
         info!("User '{}' deleted", name);
         self.user_manager.autosave()?;
         println!();
@@ -253,10 +247,14 @@ impl Application {
         Ok(())
     }
 
-    fn handle_exit(&mut self) {
+    pub fn handle_exit(&mut self) {
         info!("Exiting application...");
-        let _ = self.user_manager.shutdown();
         self.should_exit = true;
+    }
+
+    pub fn shutdown(self) -> Result<(), String> {
+        info!("Shutting down application...");
+        self.user_manager.shutdown()
     }
 
     fn display_help(&self) {

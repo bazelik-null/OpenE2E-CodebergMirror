@@ -1,6 +1,5 @@
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD_NO_PAD;
-use serde_json::Value;
 use vodozemac::{
     Curve25519PublicKey,
     olm::{Account, Message, OlmMessage, PreKeyMessage, Session, SessionConfig, SessionPickle},
@@ -14,19 +13,19 @@ pub struct SessionInstance {
 }
 
 impl SessionInstance {
-    /// Serializes session to encrypted JSON
-    pub fn serialize(&self, key: &[u8; 32]) -> Result<Value, String> {
+    /// Serializes session to encrypted bytes
+    pub fn serialize(&self, key: &[u8; 32]) -> Result<String, String> {
         let pickle = self.session.pickle();
         let encrypted_pickle = pickle.encrypt(key);
-
-        serde_json::to_value((self.name.clone(), encrypted_pickle.to_string())).map_err_to_string()
+        Ok(encrypted_pickle.to_string())
     }
 
-    /// Deserializes session from encrypted JSON
-    pub fn deserialize(json: Value, key: &[u8; 32]) -> Result<Self, String> {
-        let (name, encrypted_pickle_str): (String, String) =
-            serde_json::from_value(json).map_err_to_string()?;
-
+    /// Deserializes session from encrypted bytes
+    pub fn deserialize(
+        name: String,
+        encrypted_pickle_str: String,
+        key: &[u8; 32],
+    ) -> Result<Self, String> {
         let pickle =
             SessionPickle::from_encrypted(&encrypted_pickle_str, key).map_err_to_string()?;
 
@@ -265,24 +264,28 @@ impl SessionManager {
 
     // Persistence
 
-    /// Serializes all sessions to an encrypted JSON array.
-    pub fn export_sessions(&self, key: &[u8; 32]) -> Result<Value, String> {
-        let serialized: Result<Vec<Value>, String> = self
-            .sessions
+    /// Exports all sessions as a Vec of tuples (name, encrypted_pickle)
+    pub fn export_sessions(&self, key: &[u8; 32]) -> Result<Vec<(String, String)>, String> {
+        self.sessions
             .iter()
-            .map(|session| session.serialize(key))
-            .collect();
-
-        serde_json::to_value(serialized?).map_err_to_string()
+            .map(|session| {
+                let encrypted_pickle = session.serialize(key)?;
+                Ok((session.name.clone(), encrypted_pickle))
+            })
+            .collect()
     }
 
-    /// Deserializes all sessions from an encrypted JSON array.
-    pub fn import_sessions(&mut self, json: Value, key: &[u8; 32]) -> Result<(), String> {
-        let serialized_sessions: Vec<Value> = serde_json::from_value(json).map_err_to_string()?;
-
-        self.sessions = serialized_sessions
+    /// Imports all sessions from a Vec of tuples (name, encrypted_pickle)
+    pub fn import_sessions(
+        &mut self,
+        sessions: Vec<(String, String)>,
+        key: &[u8; 32],
+    ) -> Result<(), String> {
+        self.sessions = sessions
             .into_iter()
-            .map(|session_json| SessionInstance::deserialize(session_json, key))
+            .map(|(name, encrypted_pickle_str)| {
+                SessionInstance::deserialize(name, encrypted_pickle_str, key)
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(())

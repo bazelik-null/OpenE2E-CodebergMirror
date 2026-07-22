@@ -1,162 +1,463 @@
-use log::error;
-use serde_json::Value;
-use std::sync::mpsc;
-use std::thread;
-use std::time::{Duration, Instant};
+use log::{debug, error, info};
+use rocksdb::{ColumnFamily, DB, Options};
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
-enum SaveMessage {
-    Save(Value),
-    Shutdown,
+use crate::error_mapper::MapErrorToString;
+
+/// Manages all autosave operations and DB
+pub struct DatabaseManager {
+    db: Arc<DB>,
+    pub shutdown_pair: (Arc<Mutex<bool>>, Condvar),
 }
 
-// Autosave Worker
+impl DatabaseManager {
+    /// Creates a new manager and initializes the database
+    pub fn new(db_path: &str) -> Result<Self, String> {
+        let db = Self::initialize_database(db_path)?;
+        info!("AutosaveWorker initialized with database at: {}", db_path);
 
-/// Manages background saving of data to disk
-/// The worker defers writes to disk, adding multiple save requests into a single write operation
-pub struct AutosaveWorker {
-    sender: mpsc::Sender<SaveMessage>,
-    thread_handle: Option<thread::JoinHandle<()>>,
-}
+        Ok(DatabaseManager {
+            db: Arc::new(db),
+            shutdown_pair: (Arc::new(Mutex::new(false)), Condvar::new()),
+        })
+    }
 
-impl AutosaveWorker {
-    const DEBOUNCE_DURATION_MS: u64 = 500;
+    /// Initializes the database with required column families
+    fn initialize_database(db_path: &str) -> Result<DB, String> {
+        let mut options = Options::default();
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
 
-    /// Creates a new autosave worker for the given filepath
-    /// Spawns a background thread that handles all disk I/O operations
-    pub fn new(filepath: String) -> Self {
-        let (sender, receiver) = mpsc::channel();
+        let column_families = vec![
+            rocksdb::ColumnFamilyDescriptor::new("users", Options::default()),
+            rocksdb::ColumnFamilyDescriptor::new("sessions", Options::default()),
+            rocksdb::ColumnFamilyDescriptor::new("messages", Options::default()),
+            rocksdb::ColumnFamilyDescriptor::new("user_sessions", Options::default()),
+            rocksdb::ColumnFamilyDescriptor::new("session_messages", Options::default()),
+        ];
 
-        let thread_handle = thread::spawn(move || {
-            Self::worker_loop(receiver, filepath);
-        });
+        DB::open_cf_descriptors(&options, db_path, column_families).map_err_to_string()
+    }
 
-        Self {
-            sender,
-            thread_handle: Some(thread_handle),
+    // Generic operations
+
+    /// Generic save operation for any entity
+    fn save_entity(
+        &self,
+        cf_name: &str,
+        key: &str,
+        data: &[u8],
+        entity_type: &str,
+        context: &str,
+    ) -> Result<(), String> {
+        let cf = self.get_column_family(cf_name)?;
+        self.db
+            .put_cf(cf, key.as_bytes(), data)
+            .map_err_to_string()?;
+        debug!("Saved {}: {} ({} bytes)", entity_type, context, data.len());
+        Ok(())
+    }
+
+    /// Generic get operation for any entity
+    fn get_entity(&self, cf_name: &str, key: &str, entity_type: &str) -> Result<Vec<u8>, String> {
+        let cf = self.get_column_family(cf_name)?;
+        self.db
+            .get_cf(cf, key.as_bytes())
+            .map_err_to_string()?
+            .ok_or_else(|| format!("Couldn't find {}: {}", entity_type, key))
+    }
+
+    /// Generic delete operation for any entity
+    fn delete_entity(&self, cf_name: &str, key: &str, entity_type: &str) -> Result<(), String> {
+        let cf = self.get_column_family(cf_name)?;
+        self.db.delete_cf(cf, key.as_bytes()).map_err_to_string()?;
+        debug!("Deleted {}: {}", entity_type, key);
+        Ok(())
+    }
+
+    // User operations
+
+    pub fn save_user(&self, user_id: &str, data: &[u8]) -> Result<(), String> {
+        self.save_entity("users", user_id, data, "user", user_id)
+    }
+
+    pub fn get_user(&self, user_id: &str) -> Result<Vec<u8>, String> {
+        self.get_entity("users", user_id, "user")
+    }
+
+    pub fn get_all_users(&self) -> Result<Vec<(String, Vec<u8>)>, String> {
+        self.get_all_from_cf("users")
+    }
+
+    pub fn delete_user(&self, user_id: &str) -> Result<(), String> {
+        self.delete_entity("users", user_id, "user")
+    }
+
+    // Session operations
+
+    pub fn save_session(&self, session_id: &str, user_id: &str, data: &[u8]) -> Result<(), String> {
+        self.save_entity(
+            "sessions",
+            session_id,
+            data,
+            "session",
+            &format!("{} for user: {}", session_id, user_id),
+        )?;
+        self.add_to_index("user_sessions", user_id, session_id)
+    }
+
+    pub fn get_session(&self, session_id: &str) -> Result<Vec<u8>, String> {
+        self.get_entity("sessions", session_id, "session")
+    }
+
+    pub fn get_sessions_by_user(&self, user_id: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
+        self.get_related_entities("user_sessions", user_id, "sessions", "sessions")
+    }
+
+    pub fn delete_session(&self, session_id: &str, user_id: &str) -> Result<(), String> {
+        self.delete_entity("sessions", session_id, "session")?;
+        self.remove_from_index("user_sessions", user_id, session_id)
+    }
+
+    // Messages operations
+
+    pub fn save_message(
+        &self,
+        message_id: &str,
+        session_id: &str,
+        data: &[u8],
+    ) -> Result<(), String> {
+        self.save_entity(
+            "messages",
+            message_id,
+            data,
+            "message",
+            &format!("{} for session: {}", message_id, session_id),
+        )?;
+        self.add_to_index("session_messages", session_id, message_id)
+    }
+
+    pub fn get_message(&self, message_id: &str) -> Result<Vec<u8>, String> {
+        self.get_entity("messages", message_id, "message")
+    }
+
+    pub fn get_messages_by_session(&self, session_id: &str) -> Result<Vec<Vec<u8>>, String> {
+        let cf = self.get_column_family("session_messages")?;
+        let index_key = format!("session:{}:messages", session_id);
+
+        match self
+            .db
+            .get_cf(cf, index_key.as_bytes())
+            .map_err_to_string()?
+        {
+            Some(data) => {
+                let message_ids: Vec<String> = serde_json::from_slice(&data)
+                    .map_err(|e| format!("Failed to deserialize message list: {}", e))?;
+                self.fetch_entities("messages", &message_ids)
+            }
+            None => Ok(Vec::new()),
         }
     }
 
-    // Save Operations
-
-    /// Queues data to be saved to disk
-    pub fn queue_save(&self, data: Value) -> Result<(), String> {
-        self.sender
-            .send(SaveMessage::Save(data))
-            .map_err(|_| "Autosave worker disconnected".to_string())
+    pub fn delete_message(&self, message_id: &str, session_id: &str) -> Result<(), String> {
+        self.delete_entity("messages", message_id, "message")?;
+        self.remove_from_index("session_messages", session_id, message_id)
     }
 
-    /// Ensures final data is saved
-    pub fn shutdown(&mut self) -> Result<(), String> {
-        let _ = self.sender.send(SaveMessage::Shutdown);
+    // Index managment
 
-        if let Some(handle) = self.thread_handle.take() {
-            handle
-                .join()
-                .map_err(|_| "Failed to join autosave worker thread".to_string())
+    /// Generic operation to add an ID to an index
+    fn add_to_index(&self, index_cf: &str, parent_id: &str, child_id: &str) -> Result<(), String> {
+        let cf = self.get_column_family(index_cf)?;
+        let index_key = self.build_index_key(index_cf, parent_id);
+
+        let mut ids = self.load_index(cf, &index_key)?;
+
+        if !ids.contains(&child_id.to_string()) {
+            ids.push(child_id.to_string());
+        }
+
+        self.save_index(cf, &index_key, &ids)
+    }
+
+    /// Generic operation to remove an ID from an index
+    fn remove_from_index(
+        &self,
+        index_cf: &str,
+        parent_id: &str,
+        child_id: &str,
+    ) -> Result<(), String> {
+        let cf = self.get_column_family(index_cf)?;
+        let index_key = self.build_index_key(index_cf, parent_id);
+
+        if let Some(data) = self
+            .db
+            .get_cf(cf, index_key.as_bytes())
+            .map_err_to_string()?
+        {
+            let mut ids: Vec<String> = serde_json::from_slice(&data).unwrap_or_default();
+            ids.retain(|id| id != child_id);
+
+            if ids.is_empty() {
+                self.db
+                    .delete_cf(cf, index_key.as_bytes())
+                    .map_err_to_string()?;
+            } else {
+                self.save_index(cf, &index_key, &ids)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Builds standardized index keys
+    fn build_index_key(&self, index_cf: &str, parent_id: &str) -> String {
+        if index_cf.contains("user_sessions") {
+            format!("user:{}:sessions", parent_id)
+        } else if index_cf.contains("session_messages") {
+            format!("session:{}:messages", parent_id)
         } else {
-            Ok(())
+            format!("{}:{}:index", index_cf, parent_id)
         }
     }
 
-    // Worker Loop
+    /// Loads an index from the database
+    fn load_index(&self, cf: &ColumnFamily, key: &str) -> Result<Vec<String>, String> {
+        match self.db.get_cf(cf, key.as_bytes()).map_err_to_string()? {
+            Some(data) => serde_json::from_slice::<Vec<String>>(&data)
+                .map_err(|e| format!("Failed to deserialize index: {}", e)),
+            None => Ok(Vec::new()),
+        }
+    }
 
-    /// Main loop running in the background thread
-    /// Processes save requests with debouncing to add multiple writes
-    fn worker_loop(receiver: mpsc::Receiver<SaveMessage>, filepath: String) {
-        let debounce_duration = Duration::from_millis(Self::DEBOUNCE_DURATION_MS);
-        let mut pending_data: Option<Value> = None;
-        let mut debounce_timer: Option<Instant> = None;
+    /// Saves an index to the database
+    fn save_index(&self, cf: &ColumnFamily, key: &str, ids: &[String]) -> Result<(), String> {
+        let serialized =
+            serde_json::to_vec(ids).map_err(|e| format!("Failed to serialize index: {}", e))?;
+        self.db
+            .put_cf(cf, key.as_bytes(), &serialized)
+            .map_err_to_string()
+    }
 
-        loop {
-            match receiver.recv_timeout(debounce_duration) {
-                Ok(SaveMessage::Save(data)) => {
-                    pending_data = Some(data);
-                    debounce_timer = Some(Instant::now());
+    // Retrevial
+
+    /// Generic method to get all entries from a column family
+    fn get_all_from_cf(&self, cf_name: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
+        let cf = self.get_column_family(cf_name)?;
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
+
+        let mut entries = Vec::new();
+
+        for item in iter {
+            match item {
+                Ok((key, value)) => {
+                    let key_str = String::from_utf8(key.to_vec())
+                        .map_err(|e| format!("Failed to convert key to string: {}", e))?;
+                    entries.push((key_str, value.to_vec()));
                 }
-                Ok(SaveMessage::Shutdown) => {
-                    Self::perform_final_save(&filepath, pending_data);
-                    break;
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    Self::check_debounce_and_save(
-                        &filepath,
-                        &mut pending_data,
-                        debounce_timer,
-                        debounce_duration,
-                    );
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    break;
+                Err(e) => {
+                    error!("Failed to iterate over {}: {}", cf_name, e);
+                    return Err(e.to_string());
                 }
             }
         }
+
+        Ok(entries)
     }
 
-    /// Checks if the debounce timer has elapsed and performs a save if needed
-    fn check_debounce_and_save(
-        filepath: &str,
-        pending_data: &mut Option<Value>,
-        debounce_timer: Option<Instant>,
-        debounce_duration: Duration,
-    ) {
-        let should_save = debounce_timer
-            .map(|timer| timer.elapsed() >= debounce_duration)
-            .unwrap_or(false);
+    /// Fetch multiple entities by their IDs
+    fn fetch_entities(&self, cf_name: &str, ids: &[String]) -> Result<Vec<Vec<u8>>, String> {
+        let cf = self.get_column_family(cf_name)?;
+        let mut entities = Vec::new();
 
-        if !should_save {
-            return;
+        for id in ids {
+            match self.db.get_cf(cf, id.as_bytes()).map_err_to_string() {
+                Ok(Some(data)) => entities.push(data),
+                Ok(None) => debug!("Entity not found: {}", id),
+                Err(e) => error!("Failed to retrieve entity {}: {}", id, e),
+            }
         }
 
-        if let Some(data) = pending_data.take()
-            && let Err(e) = Self::write_to_disk(filepath, &data)
+        Ok(entities)
+    }
+
+    /// Get related entities through an index
+    fn get_related_entities(
+        &self,
+        index_cf: &str,
+        parent_id: &str,
+        entity_cf: &str,
+        entity_type: &str,
+    ) -> Result<Vec<(String, Vec<u8>)>, String> {
+        let cf = self.get_column_family(index_cf)?;
+        let index_key = self.build_index_key(index_cf, parent_id);
+
+        match self
+            .db
+            .get_cf(cf, index_key.as_bytes())
+            .map_err_to_string()?
         {
-            error!("Autosave failed: {}", e);
-            // Re-queue data for retry
-            *pending_data = Some(data);
+            Some(data) => {
+                let ids: Vec<String> = serde_json::from_slice(&data)
+                    .map_err(|e| format!("Failed to deserialize index: {}", e))?;
+
+                let entities_cf = self.get_column_family(entity_cf)?;
+                let mut entities = Vec::new();
+
+                for id in ids {
+                    match self
+                        .db
+                        .get_cf(entities_cf, id.as_bytes())
+                        .map_err_to_string()
+                    {
+                        Ok(Some(data)) => entities.push((id, data)),
+                        Ok(None) => debug!("{} not found: {}", entity_type, id),
+                        Err(e) => error!("Failed to retrieve {} {}: {}", entity_type, id, e),
+                    }
+                }
+
+                Ok(entities)
+            }
+            None => Ok(Vec::new()),
         }
     }
 
-    /// Performs a final save before shutdown
-    fn perform_final_save(filepath: &str, pending_data: Option<Value>) {
-        if let Some(data) = pending_data
-            && let Err(e) = Self::write_to_disk(filepath, &data)
-        {
-            error!("Final autosave before shutdown failed: {}", e);
+    // Utility functions
+
+    pub fn list_keys(&self, column_family: &str) -> Result<Vec<Vec<u8>>, String> {
+        let cf = self.get_column_family(column_family)?;
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
+
+        let keys: Result<Vec<Vec<u8>>, rocksdb::Error> =
+            iter.map(|item| item.map(|(key, _)| key.to_vec())).collect();
+
+        keys.map_err(|e| e.to_string())
+    }
+
+    pub fn list_keys_with_sizes(
+        &self,
+        column_family: &str,
+    ) -> Result<Vec<(Vec<u8>, usize)>, String> {
+        let cf = self.get_column_family(column_family)?;
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
+
+        let entries: Result<Vec<(Vec<u8>, usize)>, rocksdb::Error> = iter
+            .map(|item| item.map(|(key, value)| (key.to_vec(), value.len())))
+            .collect();
+
+        entries.map_err(|e| e.to_string())
+    }
+
+    fn get_column_family(&self, name: &str) -> Result<&ColumnFamily, String> {
+        self.db
+            .cf_handle(name)
+            .ok_or_else(|| format!("Column family not found: {}", name))
+    }
+
+    /// Initiates graceful shutdown of the autosave worker
+    pub fn shutdown(&self) -> Result<(), String> {
+        let mut flag = self.shutdown_pair.0.lock().map_err(|e| e.to_string())?;
+        *flag = true;
+
+        self.shutdown_pair.1.notify_all(); // Wake up waiting thread immediately
+        info!("Autosave worker shutdown initiated");
+
+        Ok(())
+    }
+
+    pub fn flush(&self) -> Result<(), String> {
+        self.db.flush().map_err_to_string()?;
+        debug!("Database flushed successfully");
+        Ok(())
+    }
+
+    pub fn compact(&self) {
+        self.db.compact_range(None::<&[u8]>, None::<&[u8]>);
+        info!("Database compaction completed");
+    }
+}
+
+/// Background worker that performs periodic autosaves
+pub struct BackgroundWorker {
+    manager: Arc<DatabaseManager>,
+    autosave_interval: Duration,
+}
+
+impl BackgroundWorker {
+    /// Creates a new background worker with the specified autosave interval
+    pub fn new(autosave_interval: Duration, db_path: &str) -> Result<Self, String> {
+        let worker = DatabaseManager::new(db_path)?;
+        Ok(BackgroundWorker {
+            manager: Arc::new(worker),
+            autosave_interval,
+        })
+    }
+
+    /// Starts the background worker thread
+    /// The worker will periodically flush the database and perform maintenance until shutdown is requested via the returned handle
+    pub fn start(self) -> WorkerHandle {
+        let worker = Arc::clone(&self.manager);
+        let interval = self.autosave_interval;
+
+        let handle = thread::spawn(move || {
+            loop {
+                let (shutdown_flag, condvar) = &worker.shutdown_pair;
+                let mut flag = shutdown_flag.lock().unwrap();
+
+                let result = condvar.wait_timeout(flag, interval).unwrap();
+                flag = result.0;
+
+                if *flag {
+                    info!("Background worker received shutdown signal");
+                    break;
+                }
+
+                drop(flag);
+
+                if let Err(e) = worker.flush() {
+                    error!("Periodic flush failed: {}", e);
+                } else {
+                    debug!("Periodic flush completed");
+                }
+            }
+
+            debug!("Background worker thread terminated");
+        });
+
+        WorkerHandle {
+            worker: Arc::clone(&self.manager),
+            thread_handle: handle,
         }
     }
-
-    // Disk I/O
-
-    /// Writes data to disk as formatted JSON.
-    fn write_to_disk(filepath: &str, data: &Value) -> Result<(), String> {
-        std::fs::write(filepath, data.to_string())
-            .map_err(|e| format!("Failed to write to disk: {}", e))
-    }
 }
 
-impl Drop for AutosaveWorker {
-    fn drop(&mut self) {
-        // Attempt graceful shutdown, but ignore errors
-        let _ = self.sender.send(SaveMessage::Shutdown);
-    }
+/// Handle for managing the background worker
+pub struct WorkerHandle {
+    worker: Arc<DatabaseManager>,
+    thread_handle: JoinHandle<()>,
 }
 
-// Storage Utilities
-
-/// Loads JSON data from a file
-/// Returns an empty JSON object if the file doesn't exist yet
-pub fn load_from_file(filepath: &str) -> Result<Value, String> {
-    match std::fs::read_to_string(filepath) {
-        Ok(content) => parse_json_content(&content),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // File doesn't exist yet; return empty object
-            Ok(Value::Object(serde_json::Map::new()))
-        }
-        Err(e) => Err(format!("Failed to read file '{}': {}", filepath, e)),
+impl WorkerHandle {
+    /// Requests shutdown and waits for the worker to terminate
+    pub fn shutdown(self) -> Result<(), String> {
+        self.worker.shutdown()?;
+        self.thread_handle
+            .join()
+            .map_err(|_| "Failed to join worker thread".to_string())?;
+        Ok(())
     }
-}
 
-/// Parses JSON content from a string
-fn parse_json_content(content: &str) -> Result<Value, String> {
-    serde_json::from_str(content).map_err(|e| format!("Failed to parse JSON: {}", e))
+    /// Performs final flush and compact before shutdown
+    pub fn graceful_shutdown(self) -> Result<(), String> {
+        self.worker.flush()?;
+        self.worker.compact();
+        self.shutdown()
+    }
+
+    /// Returns a reference to the autosave worker
+    pub fn worker(&self) -> &Arc<DatabaseManager> {
+        &self.worker
+    }
 }

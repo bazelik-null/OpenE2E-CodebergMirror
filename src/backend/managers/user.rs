@@ -2,7 +2,6 @@ use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHasher};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD_NO_PAD;
-use serde_json::{Value, from_value, to_value};
 use sha2::{Digest, Sha256};
 use vodozemac::olm::{Account, AccountPickle};
 
@@ -11,6 +10,8 @@ use crate::error_mapper::MapErrorToString;
 
 const SALT_HASH_LENGTH: usize = 16;
 const KEY_LENGTH: usize = 32;
+
+pub type SerializedUserTurple = (String, String, Vec<(String, String)>);
 
 // User
 
@@ -38,33 +39,40 @@ impl User {
 
     // Persistence
 
-    /// Serializes the user to encrypted JSON
-    /// Encrypts the Olm account and session data using the derived encryption key
-    pub fn serialize(&self) -> Result<Value, String> {
+    /// Serializes the user to encrypted format
+    /// Format: (username, encrypted_account, sessions_vec)
+    pub fn serialize(&self) -> Result<SerializedUserTurple, String> {
         let account_pickle = self.encrypt_account()?;
         let sessions_data = self.serialize_sessions()?;
 
-        to_value((self.name.clone(), account_pickle, sessions_data)).map_err_to_string()
+        Ok((self.name.clone(), account_pickle, sessions_data))
     }
 
-    /// Deserializes a user from encrypted JSON
-    /// Verifies the password by deriving the encryption key and attempting to decrypt the account data
-    pub fn deserialize(json: Value, password: &str) -> Result<Self, String> {
-        let (name, encrypted_account, sessions_data): (String, String, Value) =
-            from_value(json).map_err_to_string()?;
-
-        let encryption_key = Self::derive_encryption_key(&name, password)?;
+    /// Deserializes a user from encrypted format
+    /// Format: (username, encrypted_account, sessions_vec)
+    pub fn deserialize(
+        username: String,
+        encrypted_account: String,
+        sessions_data: Vec<(String, String)>,
+        password: &str,
+    ) -> Result<Self, String> {
+        let encryption_key = Self::derive_encryption_key(&username, password)?;
 
         let account = Self::decrypt_account(&encrypted_account, &encryption_key)?;
         let mut session_manager = SessionManager::default();
         session_manager.import_sessions(sessions_data, &encryption_key)?;
 
         Ok(Self {
-            name,
+            name: username,
             session_manager,
             account,
             encryption_key,
         })
+    }
+
+    /// Serializes all sessions using the encryption key
+    fn serialize_sessions(&self) -> Result<Vec<(String, String)>, String> {
+        self.session_manager.export_sessions(&self.encryption_key)
     }
 
     /// Encrypts the account pickle using the encryption key
@@ -77,11 +85,6 @@ impl User {
     fn decrypt_account(encrypted_pickle: &str, key: &[u8; 32]) -> Result<Account, String> {
         let pickle = AccountPickle::from_encrypted(encrypted_pickle, key).map_err_to_string()?;
         Ok(Account::from_pickle(pickle))
-    }
-
-    /// Serializes all sessions using the encryption key
-    fn serialize_sessions(&self) -> Result<Value, String> {
-        self.session_manager.export_sessions(&self.encryption_key)
     }
 
     // Cryptography

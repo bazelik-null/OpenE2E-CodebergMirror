@@ -1,51 +1,53 @@
-use crate::backend::managers::storage_manager::{AutosaveWorker, load_from_file};
-use crate::backend::managers::user::User;
-use serde_json::Value;
+use std::time::Duration;
+
+use crate::backend::managers::storage_manager::{BackgroundWorker, WorkerHandle};
+use crate::backend::managers::user::{SerializedUserTurple, User};
+use crate::error_mapper::MapErrorToString;
 
 // SerializedUser
 
 #[derive(Clone)]
 pub struct SerializedUser {
     pub name: String,
-    pub data: Value, // Encrypted JSON
+    pub account_data: String,
+    pub sessions: Vec<(String, String)>,
 }
 
 impl SerializedUser {
-    fn new(name: String, data: Value) -> Self {
-        Self { name, data }
+    fn new(name: String, account_data: String, sessions: Vec<(String, String)>) -> Self {
+        Self {
+            name,
+            account_data,
+            sessions,
+        }
     }
 }
 
 // UserManager
 
-const STORAGE_FILEPATH: &str = "storage.OpenE2E.json";
+const STORAGE_FILEPATH: &str = "OpenE2E/storage.db";
+const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(60);
 
 pub struct UserManager {
     users: Vec<SerializedUser>,
     current_user: Option<User>,
-    autosave_worker: AutosaveWorker,
-}
-
-impl Default for UserManager {
-    fn default() -> Self {
-        Self::new(STORAGE_FILEPATH)
-    }
+    db_handle: WorkerHandle,
 }
 
 impl UserManager {
-    pub fn new(filepath: &str) -> Self {
-        let mut manager = Self {
-            users: Vec::new(),
+    pub fn new() -> Result<Self, String> {
+        let worker = BackgroundWorker::new(AUTOSAVE_INTERVAL, STORAGE_FILEPATH)?;
+        let handle = worker.start();
+
+        let users = Self::load_from_db(&handle)?;
+
+        let manager = Self {
+            users,
             current_user: None,
-            autosave_worker: AutosaveWorker::new(filepath.to_string()),
+            db_handle: handle,
         };
 
-        // Load existing users from disk
-        if let Ok(users_data) = load_from_file(filepath) {
-            let _ = manager.import_users(users_data);
-        }
-
-        manager
+        Ok(manager)
     }
 
     // User operations
@@ -57,21 +59,27 @@ impl UserManager {
         }
 
         let user = User::new(name, password)?;
-        let serialized_data = user.serialize()?;
+        let (username, account_data, sessions) = user.serialize()?;
 
         self.users
-            .push(SerializedUser::new(name.to_string(), serialized_data));
+            .push(SerializedUser::new(username, account_data, sessions));
 
         Ok(())
     }
 
     /// Deletes a user by name
-    pub fn delete_user(&mut self, name: &str) {
+    pub fn delete_user(&mut self, name: &str) -> Result<(), String> {
         if self.is_current_user(name) {
             self.current_user = None;
         }
 
         self.users.retain(|user| user.name != name);
+
+        let db = self.db_handle.worker();
+
+        db.delete_user(name)?;
+
+        Ok(())
     }
 
     /// Checks if a user exists by name
@@ -93,7 +101,12 @@ impl UserManager {
             .ok_or_else(|| format!("User '{}' not found", name))?;
 
         // Deserialize with password verification
-        let user = User::deserialize(serialized_user.data.clone(), password)?;
+        let user = User::deserialize(
+            serialized_user.name.clone(),
+            serialized_user.account_data.clone(),
+            serialized_user.sessions.clone(),
+            password,
+        )?;
         self.current_user = Some(user);
         Ok(())
     }
@@ -133,55 +146,100 @@ impl UserManager {
     /// Syncs the current user to storage and saves all users to disk
     pub fn autosave(&mut self) -> Result<(), String> {
         self.sync_current_user_to_storage()?;
+        self.save_to_db()?;
 
-        let data = self.export_users()?;
-        self.autosave_worker.queue_save(data)
+        Ok(())
     }
 
     /// Syncs the current user's data back to the users list
     fn sync_current_user_to_storage(&mut self) -> Result<(), String> {
         if let Some(ref current_user) = self.current_user {
-            let serialized_data = current_user.serialize()?;
+            let (username, account_data, sessions) = current_user.serialize()?;
 
-            if let Some(stored_user) = self.users.iter_mut().find(|u| u.name == current_user.name) {
-                stored_user.data = serialized_data;
+            if let Some(stored_user) = self.users.iter_mut().find(|u| u.name == username) {
+                stored_user.account_data = account_data;
+                stored_user.sessions = sessions;
             }
         }
 
         Ok(())
     }
 
-    /// Exports all users to a JSON object
-    pub fn export_users(&self) -> Result<Value, String> {
-        let mut users_map = serde_json::Map::new();
+    /// Saves all users to the database
+    fn save_to_db(&self) -> Result<(), String> {
+        let db = self.db_handle.worker();
 
+        // Save all users to database
         for user in &self.users {
-            users_map.insert(user.name.clone(), user.data.clone());
-        }
-
-        Ok(Value::Object(users_map))
-    }
-
-    /// Imports users from a JSON object
-    pub fn import_users(&mut self, users_json: Value) -> Result<(), String> {
-        let users_map = users_json
-            .as_object()
-            .ok_or("Expected users JSON to be an object")?;
-
-        self.users.clear();
-        self.current_user = None;
-
-        for (username, user_data) in users_map {
-            self.users
-                .push(SerializedUser::new(username.clone(), user_data.clone()));
+            // Save user
+            db.save_user(&user.name, user.account_data.as_bytes())?;
+            // Save sessions
+            for session in &user.sessions {
+                db.save_session(&session.0, &user.name, session.1.as_bytes())?;
+            }
         }
 
         Ok(())
     }
 
-    /// Ensures all data is saved and shud down autosave worker
-    pub fn shutdown(&mut self) -> Result<(), String> {
+    /// Loads all users from the database
+    fn load_from_db(db_handle: &WorkerHandle) -> Result<Vec<SerializedUser>, String> {
+        let db = db_handle.worker();
+
+        let mut result = Vec::new();
+
+        let users = db.get_all_users()?;
+
+        for user in &users {
+            let mut sessions = Vec::new();
+            for (key, bytes) in db.get_sessions_by_user(&user.0)? {
+                let value = String::from_utf8(bytes).map_err_to_string()?;
+                sessions.push((key, value));
+            }
+
+            let user_result = SerializedUser {
+                name: user.0.clone(),
+                account_data: String::from_utf8(user.1.clone()).map_err_to_string()?,
+                sessions,
+            };
+
+            result.push(user_result);
+        }
+
+        Ok(result)
+    }
+
+    /// Exports all users to a serializable format
+    pub fn export_users(&self) -> Result<Vec<SerializedUserTurple>, String> {
+        Ok(self
+            .users
+            .iter()
+            .map(|user| {
+                (
+                    user.name.clone(),
+                    user.account_data.clone(),
+                    user.sessions.clone(),
+                )
+            })
+            .collect())
+    }
+
+    /// Imports users from a serializable format
+    pub fn import_users(&mut self, users_data: Vec<SerializedUserTurple>) -> Result<(), String> {
+        self.users.clear();
+        self.current_user = None;
+
+        for (username, account_data, sessions) in users_data {
+            self.users
+                .push(SerializedUser::new(username, account_data, sessions));
+        }
+
+        Ok(())
+    }
+
+    /// Ensures all data is saved and shut down autosave worker
+    pub fn shutdown(mut self) -> Result<(), String> {
         self.autosave()?;
-        self.autosave_worker.shutdown()
+        self.db_handle.graceful_shutdown()
     }
 }
