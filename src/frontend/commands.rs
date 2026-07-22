@@ -2,7 +2,7 @@ pub enum Command {
     // Misc
     Exit,
     Help,
-    Conventions,
+    Lang { language: String },
 
     // User control
     NewUser { name: String, password: String },
@@ -31,7 +31,10 @@ pub fn scan_commands(input: &str) -> Option<Command> {
     match tokens_iter.next()? {
         "exit" => Some(Command::Exit),
         "help" => Some(Command::Help),
-        "conv" => Some(Command::Conventions),
+        "lang" => {
+            let language = tokens.get(1)?.to_string();
+            Some(Command::Lang { language })
+        }
         "e" => {
             let text = tokens_iter.collect::<Vec<_>>().join(" ");
             (!text.is_empty()).then_some(Command::Encrypt { text })

@@ -3,9 +3,11 @@ use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 
 pub struct OpenE2ELogger;
 
+const DEBUG_LEVEL: Level = Level::Info;
+
 impl Log for OpenE2ELogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Debug
+        metadata.level() <= DEBUG_LEVEL
     }
 
     fn log(&self, record: &Record) {

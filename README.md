@@ -84,6 +84,7 @@ All encryption keys are derived from your user password and stored in memory dur
 - [x] Encrypted message send/receive
 - [x] Local session storage
 - [x] Message DB storage
+- [x] Rus localisation
 - [ ] CLI chat app, demo release
 - [ ] GUI chat app with Slint
 - [ ] Obfuscation mode
