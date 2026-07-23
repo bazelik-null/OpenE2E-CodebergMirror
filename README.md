@@ -107,9 +107,9 @@ All encryption keys are derived from your user password and stored in memory dur
 
 # License
 
-This project is licensed under the **GNU Lesser General Public License v3.0**. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for details.
 
-You are free to use, modify, and distribute this software under the terms of the LGPL 3.0. For more information, visit https://www.gnu.org/licenses/lgpl-3.0.html
+You are free to use, modify, and distribute this software under the terms of the GPL 3.0. For more information, visit https://www.gnu.org/licenses/gpl-3.0.html
 
 # Contributing
 
@@ -120,5 +120,4 @@ Contributions are welcome! Please submit issues and pull requests on [Codeberg](
 This software is provided as-is. While it implements industry-standard encryption, users are responsible for verifying key authenticity and following security best practices.
 
 
-
-OpenE2E  Copyright (C) 2026  bazelik-dev
+Copyright (C) 2026 bazelik-dev

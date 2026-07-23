@@ -1,6 +1,13 @@
 # Welcome and General
 welcome-header = OpenE2E CLI interface
 help-tip = Type 'help' for available commands
+copyright-notice =
+    Copyright (C) 2026 bazelik-dev
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 invalid-command = Invalid command/argument. Type 'help' for available commands.
 exiting = Exiting application...
 shutting-down = Shutting down application...

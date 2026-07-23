@@ -1,3 +1,12 @@
+/*
+ * Copyright (C) 2026 bazelik-dev
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use std::collections::HashMap;
 use unic_langid::LanguageIdentifier;
@@ -14,7 +23,7 @@ impl Localization {
         let mut available_locales = Vec::new();
 
         // Load English
-        let en_ftl = include_str!("../../locales/en-US/messages.ftl");
+        let en_ftl = include_str!("../../locales/en-US/cli.ftl");
         let en_resource = FluentResource::try_new(en_ftl.to_string())
             .map_err(|e| format!("Failed to parse English messages: {:?}", e))?;
         let mut en_bundle = FluentBundle::new(vec![
@@ -29,7 +38,7 @@ impl Localization {
         available_locales.push("en".to_string());
 
         // Load Russian
-        let ru_ftl = include_str!("../../locales/ru-RU/messages.ftl");
+        let ru_ftl = include_str!("../../locales/ru-RU/cli.ftl");
         let ru_resource = FluentResource::try_new(ru_ftl.to_string())
             .map_err(|e| format!("Failed to parse Russian messages: {:?}", e))?;
         let mut ru_bundle = FluentBundle::new(vec![

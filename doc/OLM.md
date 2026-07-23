@@ -75,3 +75,6 @@ You select the contact, then encrypt or decrypt messages for that session. The a
 - **Forward Secrecy** - Past messages remain protected even if current keys are compromised
 - **Break-in Recovery** - If a session is compromised, future messages remain protected once the ratchet advances
 - **Replay Resistance** - Ratchet state limits reuse of old message material
+
+
+Copyright (C) 2026 bazelik-dev
