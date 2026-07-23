@@ -49,7 +49,6 @@ More information about the encryption model and internal design: [OLM.md](doc/OL
 ### Build from Source
 
 **Requirements:**
-- LLVM Clang
 - Rust
 
 ```bash
@@ -68,7 +67,7 @@ cargo build --release
 ### Verification
 
 - Download `.asc` signature file from releases tab.
-- Verify: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E.asc OpenE2E`
+- Verify: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E*.asc OpenE2E*`
 - Key should match key published at: https://keys.openpgp.org/vks/v1/by-fingerprint/C4C5BDC6C5E4C96CF12B3E85B7BBEB3BC5439F72
 
 
@@ -82,7 +81,7 @@ cargo build --release
 
 ### Data Protection
 
-Messages and sessions are stored locally in RocksDB, AES-256-GCM encrypts all message data at rest in RocksDB and AES-CBC-HMAC encrypts all sessions and accounts data. Each message uses a randomly generated 12-byte nonce to ensure ciphertext uniqueness.
+Messages and sessions are stored locally in fjall DB, AES-256-GCM encrypts all message data at rest in fjall DB and AES-CBC-HMAC encrypts all sessions and accounts data. Each message uses a randomly generated 12-byte nonce to ensure ciphertext uniqueness.
 
 All encryption keys are derived from your user password and stored in memory during the session. Keys are never written to disk or persisted after logout.
 

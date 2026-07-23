@@ -9,7 +9,7 @@ use crate::frontend::localization::{Localization, fluent_args};
 
 const HEADER_WIDTH: usize = 34;
 const SECTION_WIDTH: usize = 40;
-const VERSION: &str = "v0.6";
+const VERSION: &str = "v0.7";
 
 pub struct Application {
     user_manager: UserManager,
@@ -208,12 +208,7 @@ impl Application {
     }
 
     fn session_deletion(&mut self, name: &str) -> Result<(), String> {
-        let user = self
-            .user_manager
-            .get_current_user_mut()
-            .ok_or_else(|| self.localization.get("no-user-selected"))?;
-
-        user.session_manager.delete_session(name);
+        self.user_manager.delete_session(name)?;
 
         let args = fluent_args(&[("session_name", name)]);
         info!(

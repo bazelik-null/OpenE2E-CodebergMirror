@@ -34,7 +34,7 @@ const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(60);
 pub struct UserManager {
     users: Vec<SerializedUser>,
     current_user: Option<User>,
-    db_handle: WorkerHandle,
+    pub db_handle: WorkerHandle,
 }
 
 impl UserManager {
@@ -264,6 +264,29 @@ impl UserManager {
     /// Gets mutable active user
     pub fn get_current_user_mut(&mut self) -> Option<&mut User> {
         self.current_user.as_mut()
+    }
+
+    // Sessions
+
+    pub fn delete_session(&mut self, session_id: &str) -> Result<(), String> {
+        let user = self
+            .get_current_user_mut()
+            .ok_or_else(|| "No user selected".to_string())?;
+        let username = user.name.clone();
+
+        // Delete session from manager
+        user.session_manager.delete_session(session_id);
+
+        let db = self.db_handle.worker();
+
+        // Delete all messages
+        let message_ids = db.get_message_ids_by_session(session_id)?;
+        for message_id in message_ids {
+            db.delete_message(&message_id, session_id)?;
+        }
+
+        // Delete session from DB
+        db.delete_session(session_id, &username)
     }
 
     // Persistence

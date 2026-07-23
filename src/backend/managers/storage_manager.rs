@@ -1,5 +1,5 @@
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::{debug, error, info};
-use rocksdb::{ColumnFamily, DB, Options};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -8,7 +8,7 @@ use crate::error_mapper::MapErrorToString;
 
 /// Manages all autosave operations and DB
 pub struct DatabaseManager {
-    db: Arc<DB>,
+    db: Arc<Database>,
     pub shutdown_pair: (Arc<Mutex<bool>>, Condvar),
 }
 
@@ -24,21 +24,28 @@ impl DatabaseManager {
         })
     }
 
-    /// Initializes the database with required column families
-    fn initialize_database(db_path: &str) -> Result<DB, String> {
-        let mut options = Options::default();
-        options.create_if_missing(true);
-        options.create_missing_column_families(true);
+    /// Initializes the database with required keyspaces
+    fn initialize_database(db_path: &str) -> Result<Database, String> {
+        let db = Database::builder(db_path).open().map_err_to_string()?;
 
-        let column_families = vec![
-            rocksdb::ColumnFamilyDescriptor::new("users", Options::default()),
-            rocksdb::ColumnFamilyDescriptor::new("sessions", Options::default()),
-            rocksdb::ColumnFamilyDescriptor::new("messages", Options::default()),
-            rocksdb::ColumnFamilyDescriptor::new("user_sessions", Options::default()),
-            rocksdb::ColumnFamilyDescriptor::new("session_messages", Options::default()),
-        ];
+        // Create keyspaces
+        let _ = db
+            .keyspace("users", KeyspaceCreateOptions::default)
+            .map_err_to_string()?;
+        let _ = db
+            .keyspace("sessions", KeyspaceCreateOptions::default)
+            .map_err_to_string()?;
+        let _ = db
+            .keyspace("messages", KeyspaceCreateOptions::default)
+            .map_err_to_string()?;
+        let _ = db
+            .keyspace("user_sessions", KeyspaceCreateOptions::default)
+            .map_err_to_string()?;
+        let _ = db
+            .keyspace("session_messages", KeyspaceCreateOptions::default)
+            .map_err_to_string()?;
 
-        DB::open_cf_descriptors(&options, db_path, column_families).map_err_to_string()
+        Ok(db)
     }
 
     // Generic operations
@@ -46,33 +53,42 @@ impl DatabaseManager {
     /// Generic save operation for any entity
     fn save_entity(
         &self,
-        cf_name: &str,
+        keyspace_name: &str,
         key: &str,
         data: &[u8],
         entity_type: &str,
         context: &str,
     ) -> Result<(), String> {
-        let cf = self.get_column_family(cf_name)?;
-        self.db
-            .put_cf(cf, key.as_bytes(), data)
-            .map_err_to_string()?;
+        let keyspace = self.get_keyspace(keyspace_name)?;
+        keyspace.insert(key.as_bytes(), data).map_err_to_string()?;
         debug!("Saved {}: {} ({} bytes)", entity_type, context, data.len());
         Ok(())
     }
 
     /// Generic get operation for any entity
-    fn get_entity(&self, cf_name: &str, key: &str, entity_type: &str) -> Result<Vec<u8>, String> {
-        let cf = self.get_column_family(cf_name)?;
-        self.db
-            .get_cf(cf, key.as_bytes())
+    fn get_entity(
+        &self,
+        keyspace_name: &str,
+        key: &str,
+        entity_type: &str,
+    ) -> Result<Vec<u8>, String> {
+        let keyspace = self.get_keyspace(keyspace_name)?;
+        keyspace
+            .get(key.as_bytes())
             .map_err_to_string()?
             .ok_or_else(|| format!("Couldn't find {}: {}", entity_type, key))
+            .map(|v| v.to_vec())
     }
 
     /// Generic delete operation for any entity
-    fn delete_entity(&self, cf_name: &str, key: &str, entity_type: &str) -> Result<(), String> {
-        let cf = self.get_column_family(cf_name)?;
-        self.db.delete_cf(cf, key.as_bytes()).map_err_to_string()?;
+    fn delete_entity(
+        &self,
+        keyspace_name: &str,
+        key: &str,
+        entity_type: &str,
+    ) -> Result<(), String> {
+        let keyspace = self.get_keyspace(keyspace_name)?;
+        keyspace.remove(key.as_bytes()).map_err_to_string()?;
         debug!("Deleted {}: {}", entity_type, key);
         Ok(())
     }
@@ -88,7 +104,7 @@ impl DatabaseManager {
     }
 
     pub fn get_all_users(&self) -> Result<Vec<(String, Vec<u8>)>, String> {
-        self.get_all_from_cf("users")
+        self.get_all_from_keyspace("users")
     }
 
     pub fn delete_user(&self, user_id: &str) -> Result<(), String> {
@@ -144,18 +160,28 @@ impl DatabaseManager {
     }
 
     pub fn get_messages_by_session(&self, session_id: &str) -> Result<Vec<Vec<u8>>, String> {
-        let cf = self.get_column_family("session_messages")?;
+        let keyspace = self.get_keyspace("session_messages")?;
         let index_key = format!("session:{}:messages", session_id);
 
-        match self
-            .db
-            .get_cf(cf, index_key.as_bytes())
-            .map_err_to_string()?
-        {
+        match keyspace.get(index_key.as_bytes()).map_err_to_string()? {
             Some(data) => {
                 let message_ids: Vec<String> = serde_json::from_slice(&data)
                     .map_err(|e| format!("Failed to deserialize message list: {}", e))?;
                 self.fetch_entities("messages", &message_ids)
+            }
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn get_message_ids_by_session(&self, session_id: &str) -> Result<Vec<String>, String> {
+        let keyspace = self.get_keyspace("session_messages")?;
+        let index_key = format!("session:{}:messages", session_id);
+
+        match keyspace.get(index_key.as_bytes()).map_err_to_string()? {
+            Some(data) => {
+                let message_ids: Vec<String> = serde_json::from_slice(&data)
+                    .map_err(|e| format!("Failed to deserialize message list: {}", e))?;
+                Ok(message_ids)
             }
             None => Ok(Vec::new()),
         }
@@ -166,46 +192,45 @@ impl DatabaseManager {
         self.remove_from_index("session_messages", session_id, message_id)
     }
 
-    // Index managment
+    // Index management
 
     /// Generic operation to add an ID to an index
-    fn add_to_index(&self, index_cf: &str, parent_id: &str, child_id: &str) -> Result<(), String> {
-        let cf = self.get_column_family(index_cf)?;
-        let index_key = self.build_index_key(index_cf, parent_id);
+    fn add_to_index(
+        &self,
+        index_keyspace: &str,
+        parent_id: &str,
+        child_id: &str,
+    ) -> Result<(), String> {
+        let keyspace = self.get_keyspace(index_keyspace)?;
+        let index_key = self.build_index_key(index_keyspace, parent_id);
 
-        let mut ids = self.load_index(cf, &index_key)?;
+        let mut ids = self.load_index(&keyspace, &index_key)?;
 
         if !ids.contains(&child_id.to_string()) {
             ids.push(child_id.to_string());
         }
 
-        self.save_index(cf, &index_key, &ids)
+        self.save_index(&keyspace, &index_key, &ids)
     }
 
     /// Generic operation to remove an ID from an index
     fn remove_from_index(
         &self,
-        index_cf: &str,
+        index_keyspace: &str,
         parent_id: &str,
         child_id: &str,
     ) -> Result<(), String> {
-        let cf = self.get_column_family(index_cf)?;
-        let index_key = self.build_index_key(index_cf, parent_id);
+        let keyspace = self.get_keyspace(index_keyspace)?;
+        let index_key = self.build_index_key(index_keyspace, parent_id);
 
-        if let Some(data) = self
-            .db
-            .get_cf(cf, index_key.as_bytes())
-            .map_err_to_string()?
-        {
+        if let Some(data) = keyspace.get(index_key.as_bytes()).map_err_to_string()? {
             let mut ids: Vec<String> = serde_json::from_slice(&data).unwrap_or_default();
             ids.retain(|id| id != child_id);
 
             if ids.is_empty() {
-                self.db
-                    .delete_cf(cf, index_key.as_bytes())
-                    .map_err_to_string()?;
+                keyspace.remove(index_key.as_bytes()).map_err_to_string()?;
             } else {
-                self.save_index(cf, &index_key, &ids)?;
+                self.save_index(&keyspace, &index_key, &ids)?;
             }
         }
 
@@ -213,19 +238,19 @@ impl DatabaseManager {
     }
 
     /// Builds standardized index keys
-    fn build_index_key(&self, index_cf: &str, parent_id: &str) -> String {
-        if index_cf.contains("user_sessions") {
+    fn build_index_key(&self, index_keyspace: &str, parent_id: &str) -> String {
+        if index_keyspace.contains("user_sessions") {
             format!("user:{}:sessions", parent_id)
-        } else if index_cf.contains("session_messages") {
+        } else if index_keyspace.contains("session_messages") {
             format!("session:{}:messages", parent_id)
         } else {
-            format!("{}:{}:index", index_cf, parent_id)
+            format!("{}:{}:index", index_keyspace, parent_id)
         }
     }
 
     /// Loads an index from the database
-    fn load_index(&self, cf: &ColumnFamily, key: &str) -> Result<Vec<String>, String> {
-        match self.db.get_cf(cf, key.as_bytes()).map_err_to_string()? {
+    fn load_index(&self, keyspace: &Keyspace, key: &str) -> Result<Vec<String>, String> {
+        match keyspace.get(key.as_bytes()).map_err_to_string()? {
             Some(data) => serde_json::from_slice::<Vec<String>>(&data)
                 .map_err(|e| format!("Failed to deserialize index: {}", e)),
             None => Ok(Vec::new()),
@@ -233,48 +258,40 @@ impl DatabaseManager {
     }
 
     /// Saves an index to the database
-    fn save_index(&self, cf: &ColumnFamily, key: &str, ids: &[String]) -> Result<(), String> {
+    fn save_index(&self, keyspace: &Keyspace, key: &str, ids: &[String]) -> Result<(), String> {
         let serialized =
             serde_json::to_vec(ids).map_err(|e| format!("Failed to serialize index: {}", e))?;
-        self.db
-            .put_cf(cf, key.as_bytes(), &serialized)
+        keyspace
+            .insert(key.as_bytes(), &serialized)
             .map_err_to_string()
     }
 
-    // Retrevial
+    // Retrieval
 
-    /// Generic method to get all entries from a column family
-    fn get_all_from_cf(&self, cf_name: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
-        let cf = self.get_column_family(cf_name)?;
-        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
-
+    /// Generic method to get all entries from a keyspace
+    fn get_all_from_keyspace(&self, keyspace_name: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
+        let keyspace = self.get_keyspace(keyspace_name)?;
         let mut entries = Vec::new();
 
-        for item in iter {
-            match item {
-                Ok((key, value)) => {
-                    let key_str = String::from_utf8(key.to_vec())
-                        .map_err(|e| format!("Failed to convert key to string: {}", e))?;
-                    entries.push((key_str, value.to_vec()));
-                }
-                Err(e) => {
-                    error!("Failed to iterate over {}: {}", cf_name, e);
-                    return Err(e.to_string());
-                }
-            }
+        for result in keyspace.iter() {
+            let (key, value) = result.into_inner().map_err_to_string()?;
+
+            let key_str = String::from_utf8(key.to_vec())
+                .map_err(|e| format!("Failed to convert key to string: {}", e))?;
+            entries.push((key_str, value.to_vec()));
         }
 
         Ok(entries)
     }
 
     /// Fetch multiple entities by their IDs
-    fn fetch_entities(&self, cf_name: &str, ids: &[String]) -> Result<Vec<Vec<u8>>, String> {
-        let cf = self.get_column_family(cf_name)?;
+    fn fetch_entities(&self, keyspace_name: &str, ids: &[String]) -> Result<Vec<Vec<u8>>, String> {
+        let keyspace = self.get_keyspace(keyspace_name)?;
         let mut entities = Vec::new();
 
         for id in ids {
-            match self.db.get_cf(cf, id.as_bytes()).map_err_to_string() {
-                Ok(Some(data)) => entities.push(data),
+            match keyspace.get(id.as_bytes()).map_err_to_string() {
+                Ok(Some(data)) => entities.push(data.to_vec()),
                 Ok(None) => debug!("Entity not found: {}", id),
                 Err(e) => error!("Failed to retrieve entity {}: {}", id, e),
             }
@@ -286,33 +303,25 @@ impl DatabaseManager {
     /// Get related entities through an index
     fn get_related_entities(
         &self,
-        index_cf: &str,
+        index_keyspace: &str,
         parent_id: &str,
-        entity_cf: &str,
+        entity_keyspace: &str,
         entity_type: &str,
     ) -> Result<Vec<(String, Vec<u8>)>, String> {
-        let cf = self.get_column_family(index_cf)?;
-        let index_key = self.build_index_key(index_cf, parent_id);
+        let index_ks = self.get_keyspace(index_keyspace)?;
+        let index_key = self.build_index_key(index_keyspace, parent_id);
 
-        match self
-            .db
-            .get_cf(cf, index_key.as_bytes())
-            .map_err_to_string()?
-        {
+        match index_ks.get(index_key.as_bytes()).map_err_to_string()? {
             Some(data) => {
                 let ids: Vec<String> = serde_json::from_slice(&data)
                     .map_err(|e| format!("Failed to deserialize index: {}", e))?;
 
-                let entities_cf = self.get_column_family(entity_cf)?;
+                let entities_ks = self.get_keyspace(entity_keyspace)?;
                 let mut entities = Vec::new();
 
                 for id in ids {
-                    match self
-                        .db
-                        .get_cf(entities_cf, id.as_bytes())
-                        .map_err_to_string()
-                    {
-                        Ok(Some(data)) => entities.push((id, data)),
+                    match entities_ks.get(id.as_bytes()).map_err_to_string() {
+                        Ok(Some(data)) => entities.push((id, data.to_vec())),
                         Ok(None) => debug!("{} not found: {}", entity_type, id),
                         Err(e) => error!("Failed to retrieve {} {}: {}", entity_type, id, e),
                     }
@@ -326,34 +335,21 @@ impl DatabaseManager {
 
     // Utility functions
 
-    pub fn list_keys(&self, column_family: &str) -> Result<Vec<Vec<u8>>, String> {
-        let cf = self.get_column_family(column_family)?;
-        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
+    pub fn list_keys(&self, keyspace_name: &str) -> Result<Vec<Vec<u8>>, String> {
+        let keyspace = self.get_keyspace(keyspace_name)?;
+        let mut keys = Vec::new();
 
-        let keys: Result<Vec<Vec<u8>>, rocksdb::Error> =
-            iter.map(|item| item.map(|(key, _)| key.to_vec())).collect();
+        for result in keyspace.iter() {
+            keys.push(result.key().map_err_to_string()?.to_vec());
+        }
 
-        keys.map_err(|e| e.to_string())
+        Ok(keys)
     }
 
-    pub fn list_keys_with_sizes(
-        &self,
-        column_family: &str,
-    ) -> Result<Vec<(Vec<u8>, usize)>, String> {
-        let cf = self.get_column_family(column_family)?;
-        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
-
-        let entries: Result<Vec<(Vec<u8>, usize)>, rocksdb::Error> = iter
-            .map(|item| item.map(|(key, value)| (key.to_vec(), value.len())))
-            .collect();
-
-        entries.map_err(|e| e.to_string())
-    }
-
-    fn get_column_family(&self, name: &str) -> Result<&ColumnFamily, String> {
+    fn get_keyspace(&self, name: &str) -> Result<Keyspace, String> {
         self.db
-            .cf_handle(name)
-            .ok_or_else(|| format!("Column family not found: {}", name))
+            .keyspace(name, KeyspaceCreateOptions::default)
+            .map_err_to_string()
     }
 
     /// Initiates graceful shutdown of the autosave worker
@@ -361,21 +357,19 @@ impl DatabaseManager {
         let mut flag = self.shutdown_pair.0.lock().map_err(|e| e.to_string())?;
         *flag = true;
 
-        self.shutdown_pair.1.notify_all(); // Wake up waiting thread immediately
+        self.shutdown_pair.1.notify_all();
         info!("Autosave worker shutdown initiated");
 
         Ok(())
     }
 
+    /// Saves DB to disk
     pub fn flush(&self) -> Result<(), String> {
-        self.db.flush().map_err_to_string()?;
-        debug!("Database flushed successfully");
+        self.db
+            .persist(fjall::PersistMode::SyncAll)
+            .map_err_to_string()?;
+        debug!("Database saved successfully");
         Ok(())
-    }
-
-    pub fn compact(&self) {
-        self.db.compact_range(None::<&[u8]>, None::<&[u8]>);
-        info!("Database compaction completed");
     }
 }
 
@@ -452,7 +446,6 @@ impl WorkerHandle {
     /// Performs final flush and compact before shutdown
     pub fn graceful_shutdown(self) -> Result<(), String> {
         self.worker.flush()?;
-        self.worker.compact();
         self.shutdown()
     }
 

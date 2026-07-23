@@ -3,7 +3,11 @@ use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 
 pub struct OpenE2ELogger;
 
-const DEBUG_LEVEL: Level = Level::Info;
+#[cfg(debug_assertions)]
+const DEBUG_LEVEL: Level = Level::Debug;
+
+#[cfg(not(debug_assertions))]
+const DEBUG_LEVEL: Level = Level::Error;
 
 impl Log for OpenE2ELogger {
     fn enabled(&self, metadata: &Metadata) -> bool {

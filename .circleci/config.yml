@@ -1,0 +1,57 @@
+version: 2.1
+
+jobs:
+  build-windows:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - run:
+          name: Install Windows target
+          command: rustup target add x86_64-pc-windows-gnu
+      - run:
+          name: Install mingw-w64
+          command: apt-get update && apt-get install -y mingw-w64
+      - run:
+          name: Build Windows Release
+          command: cargo build --release --target x86_64-pc-windows-gnu
+      - store_artifacts:
+          path: target/x86_64-pc-windows-gnu/release/OpenE2E.exe
+          destination: OpenE2E-windows_64.exe
+
+  build-linux-64:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - run:
+          name: Build Linux 64-bit Release
+          command: cargo build --release --target x86_64-unknown-linux-gnu
+      - store_artifacts:
+          path: target/x86_64-unknown-linux-gnu/release/OpenE2E
+          destination: OpenE2E-linux_64
+
+  build-linux-arm:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - run:
+          name: Install ARM target
+          command: rustup target add armv7-unknown-linux-gnueabihf
+      - run:
+          name: Install ARM toolchain
+          command: apt-get update && apt-get install -y gcc-arm-linux-gnueabihf
+      - run:
+          name: Build Linux ARM Release
+          command: cargo build --release --target armv7-unknown-linux-gnueabihf
+      - store_artifacts:
+          path: target/armv7-unknown-linux-gnueabihf/release/OpenE2E
+          destination: OpenE2E-linux_arm
+
+workflows:
+  build:
+    jobs:
+      - build-windows
+      - build-linux-64
+      - build-linux-arm
