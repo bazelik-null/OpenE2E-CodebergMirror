@@ -68,7 +68,7 @@ cargo build --release
 ### Проверка
 
 - Скачайте файл подписи `.asc` со вкладки releases.
-- Проверьте подпись: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E.asc OpenE2E`
+- Проверьте подпись: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E*.asc $(find . -maxdepth 1 -name 'OpenE2E*' ! -name '*.asc')`
 - Ключ должен совпадать с ключом опубликованным по адресу: https://keys.openpgp.org/vks/v1/by-fingerprint/C4C5BDC6C5E4C96CF12B3E85B7BBEB3BC5439F72
 
 # Безопасность

@@ -67,7 +67,7 @@ cargo build --release
 ### Verification
 
 - Download `.asc` signature file from releases tab.
-- Verify: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E*.asc OpenE2E*`
+- Verify: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E*.asc $(find . -maxdepth 1 -name 'OpenE2E*' ! -name '*.asc')`
 - Key should match key published at: https://keys.openpgp.org/vks/v1/by-fingerprint/C4C5BDC6C5E4C96CF12B3E85B7BBEB3BC5439F72
 
 

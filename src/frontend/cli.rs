@@ -12,6 +12,7 @@ use log::{error, info};
 use std::io::{self, Write};
 
 use crate::backend::managers::user_manager::UserManager;
+use crate::backend::objects::session::SessionInstance;
 use crate::backend::objects::user::User;
 use crate::frontend::commands::{Command, scan_commands};
 use crate::frontend::localization::{Localization, fluent_args};
@@ -495,7 +496,7 @@ fn create_inbound_session(
     localization: &Localization,
 ) -> Result<(), String> {
     println!("{}", localization.get("generating-keys").grey());
-    let our_keys = user.session_manager.generate_keys(&mut user.account)?;
+    let our_keys = SessionInstance::generate_keys(&mut user.account)?;
     println!("{}", localization.get("share-keys").grey());
     println!("{}", our_keys.bold());
     println!();
@@ -524,7 +525,7 @@ fn create_outbound_session(
     localization: &Localization,
 ) -> Result<(), String> {
     println!("{}", localization.get("generating-keys").grey());
-    let our_keys = user.session_manager.generate_keys(&mut user.account)?;
+    let our_keys = SessionInstance::generate_keys(&mut user.account)?;
     println!("{}", localization.get("share-keys").grey());
     println!("{}", our_keys.bold());
     println!();
