@@ -39,8 +39,7 @@ impl SessionManager {
         remote_keys_bundle: &str,
     ) -> Result<(), String> {
         let session = SessionInstance::create_outbound(account, name, remote_keys_bundle)?;
-        self.add_session(session);
-        Ok(())
+        self.add_session(session)
     }
 
     /// Creates an inbound session and adds it to the manager
@@ -53,13 +52,18 @@ impl SessionManager {
     ) -> Result<(), String> {
         let session =
             SessionInstance::create_inbound(account, name, remote_keys_bundle, first_message_b64)?;
-        self.add_session(session);
-        Ok(())
+        self.add_session(session)
     }
 
     /// Adds a session instance to the manager
-    pub fn add_session(&mut self, session: SessionInstance) {
+    pub fn add_session(&mut self, session: SessionInstance) -> Result<(), String> {
+        if self.session_exists(&session.name) {
+            return Err(format!("Session '{}' already exists", session.name));
+        }
+
         self.sessions.push(session);
+
+        Ok(())
     }
 
     /// Deletes a session by name
@@ -68,6 +72,11 @@ impl SessionManager {
             self.current_session_name = None;
         }
         self.sessions.retain(|session| session.name != name);
+    }
+
+    /// Checks if a session exists by name
+    fn session_exists(&self, name: &str) -> bool {
+        self.sessions.iter().any(|s| s.name == name)
     }
 
     /// Retrieves all session names

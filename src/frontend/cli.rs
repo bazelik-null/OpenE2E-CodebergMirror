@@ -109,7 +109,7 @@ impl Application {
         };
 
         let args = fluent_args(&[("language", lang_name)]);
-        info!(
+        println!(
             "{}",
             self.localization
                 .get_with_args("language-changed", Some(&args))
@@ -193,13 +193,20 @@ impl Application {
     fn session_creation(&mut self, name: &str) -> Result<(), String> {
         self.display_section(self.localization.get("section-session-management"));
 
+        // Check if logged in
+        let _ = self
+            .user_manager
+            .get_current_user()
+            .ok_or_else(|| self.localization.get("no-user-selected"))?;
+
         let session_type = self.prompt_session_type()?;
 
-        info!("{}", self.localization.get("creating-session"));
         let user = self
             .user_manager
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
+
+        info!("{}", self.localization.get("creating-session"));
 
         match session_type.as_str() {
             "in" => create_inbound_session(user, name, &self.localization)?,

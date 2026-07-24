@@ -18,51 +18,107 @@ pub struct Localization {
 }
 
 impl Localization {
+    /// Create a new Localization instance with embedded locales
     pub fn new(default_locale: &str) -> Result<Self, String> {
         let mut bundles = HashMap::new();
         let mut available_locales = Vec::new();
 
-        // Load English
-        let en_ftl = include_str!("../../locales/en-US/cli.ftl");
-        let en_resource = FluentResource::try_new(en_ftl.to_string())
-            .map_err(|e| format!("Failed to parse English messages: {:?}", e))?;
-        let mut en_bundle = FluentBundle::new(vec![
-            "en-US"
-                .parse::<LanguageIdentifier>()
-                .map_err(|e| format!("Failed to parse en-US language ID: {}", e))?,
-        ]);
-        en_bundle
-            .add_resource(en_resource)
-            .map_err(|e| format!("Failed to add English resource: {:?}", e))?;
-        bundles.insert("en".to_string(), en_bundle);
-        available_locales.push("en".to_string());
+        // Load all embedded locales
+        let locales = Self::embedded_locales();
 
-        // Load Russian
-        let ru_ftl = include_str!("../../locales/ru-RU/cli.ftl");
-        let ru_resource = FluentResource::try_new(ru_ftl.to_string())
-            .map_err(|e| format!("Failed to parse Russian messages: {:?}", e))?;
-        let mut ru_bundle = FluentBundle::new(vec![
-            "ru-RU"
-                .parse::<LanguageIdentifier>()
-                .map_err(|e| format!("Failed to parse ru-RU language ID: {}", e))?,
-        ]);
-        ru_bundle
-            .add_resource(ru_resource)
-            .map_err(|e| format!("Failed to add Russian resource: {:?}", e))?;
-        bundles.insert("ru".to_string(), ru_bundle);
-        available_locales.push("ru".to_string());
+        for (locale_code, ftl_content) in locales {
+            match Self::create_bundle(&locale_code, ftl_content) {
+                Ok(bundle) => {
+                    bundles.insert(locale_code.clone(), bundle);
+                    available_locales.push(locale_code);
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to load locale: {}", e);
+                }
+            }
+        }
 
-        let normalized_locale = if default_locale == "ru" || default_locale == "ru-RU" {
-            "ru".to_string()
+        if bundles.is_empty() {
+            return Err("No locales could be loaded".to_string());
+        }
+
+        available_locales.sort();
+
+        let normalized_locale = Self::normalize_locale(default_locale);
+        let current_locale = if bundles.contains_key(&normalized_locale) {
+            normalized_locale
         } else {
-            "en".to_string()
+            bundles.keys().next().unwrap().clone()
         };
 
         Ok(Self {
             bundles,
-            current_locale: normalized_locale,
+            current_locale,
             available_locales,
         })
+    }
+
+    /// All embedded locale resources
+    /// TODO: Hardcoding locale dir is not good
+    fn embedded_locales() -> Vec<(String, &'static str)> {
+        vec![
+            (
+                "en".to_string(),
+                include_str!("../../locales/en-US/cli.ftl"),
+            ),
+            (
+                "ru".to_string(),
+                include_str!("../../locales/ru-RU/cli.ftl"),
+            ),
+        ]
+    }
+
+    /// Create a FluentBundle for a given locale
+    fn create_bundle(
+        locale_code: &str,
+        ftl_content: &str,
+    ) -> Result<FluentBundle<FluentResource>, String> {
+        if ftl_content.is_empty() {
+            return Err(format!("Empty locale content for '{}'", locale_code));
+        }
+
+        let lang_id = Self::locale_to_language_id(locale_code)
+            .map_err(|e| format!("Failed to parse language ID for '{}': {}", locale_code, e))?;
+
+        let resource = FluentResource::try_new(ftl_content.to_string())
+            .map_err(|e| format!("Failed to parse messages for '{}': {:?}", locale_code, e))?;
+
+        let mut bundle = FluentBundle::new(vec![lang_id]);
+        bundle
+            .add_resource(resource)
+            .map_err(|e| format!("Failed to add resource for '{}': {:?}", locale_code, e))?;
+
+        Ok(bundle)
+    }
+
+    /// Map locale code to LanguageIdentifier
+    fn locale_to_language_id(locale_code: &str) -> Result<LanguageIdentifier, String> {
+        // Try parsing directly first (e.g., "en-US")
+        if let Ok(lang_id) = locale_code.parse::<LanguageIdentifier>() {
+            return Ok(lang_id);
+        }
+
+        // If that fails, append a region code
+        // TODO: Hardcode again?
+        let lang_id_str = match locale_code {
+            "en" => "en-US",
+            "ru" => "ru-RU",
+            other => other,
+        };
+
+        lang_id_str
+            .parse::<LanguageIdentifier>()
+            .map_err(|e| format!("Invalid language ID '{}': {}", lang_id_str, e))
+    }
+
+    /// Normalize locale string to short code
+    fn normalize_locale(locale: &str) -> String {
+        locale.split('-').next().unwrap_or("en").to_lowercase()
     }
 
     /// Get a translated string with no arguments
@@ -85,23 +141,17 @@ impl Localization {
 
     /// Set the current locale
     pub fn set_locale(&mut self, locale: &str) -> Result<(), String> {
-        let normalized = if locale == "ru" || locale == "ru-RU" {
-            "ru".to_string()
-        } else if locale == "en" || locale == "en-US" {
-            "en".to_string()
-        } else {
-            return Err(format!(
-                "Unsupported language: {}. Available: {}",
-                locale,
-                self.available_locales.join(", ")
-            ));
-        };
+        let normalized = Self::normalize_locale(locale);
 
         if self.bundles.contains_key(&normalized) {
             self.current_locale = normalized;
             Ok(())
         } else {
-            Err(format!("Language {} not available", locale))
+            Err(format!(
+                "Unsupported locale: '{}'. Available: {}",
+                locale,
+                self.available_locales.join(", ")
+            ))
         }
     }
 }
