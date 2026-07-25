@@ -9,5 +9,7 @@
 
 pub mod cli;
 mod commands;
+#[cfg(feature = "gui")]
+pub mod gui;
 mod localization;
 pub mod logger;

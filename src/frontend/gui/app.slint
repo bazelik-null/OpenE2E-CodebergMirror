@@ -1,0 +1,306 @@
+// Copyright (C) 2026 bazelik-dev
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+import { Button, LineEdit, TextEdit, ComboBox, ListView, CheckBox } from "std-widgets.slint";
+
+// One rendered line in the chat transcript.
+export struct ChatLine {
+    sender: string,
+    text: string,
+    time: string,
+}
+
+export component MainWindow inherits Window {
+    title: "OpenE2E";
+    icon: @image-url("../../../doc/img/logo.png");
+    preferred-width: 460px;
+    preferred-height: 760px;
+    min-width: 360px;
+    min-height: 520px;
+
+    // ---- State, driven from Rust ----
+    in-out property <bool> logged-in: false;
+    in-out property <string> current-user;
+    in-out property <string> current-session;
+    in-out property <[string]> sessions;
+    in-out property <[ChatLine]> messages;
+    in-out property <string> message-input;
+    in-out property <string> output-text;
+    in-out property <string> status-text;
+
+    // ---- Session-creation wizard state ----
+    in-out property <bool> creating-session: false;
+    in-out property <string> new-session-name;
+    in-out property <string> peer-keys-input;
+    in-out property <string> first-msg-input;
+    in-out property <string> my-keys;      
+    in-out property <string> init-message;
+
+    // ---- Callbacks into the Rust backend ----
+    callback login(string, string);   
+    callback create-user(string, string);
+    callback logout();
+    callback select-session(string);
+    callback do-encrypt(string);
+    callback do-decrypt(string);
+    callback copy-output();
+    callback paste-input();
+    callback session-gen-keys();
+    callback session-create(string, bool, string, string);
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+
+        // ================= Login view =================
+        if !root.logged-in: VerticalLayout {
+            spacing: 8px;
+            Text {
+                text: "OpenE2E";
+                font-size: 22px;
+                horizontal-alignment: center;
+            }
+            name := LineEdit {
+                placeholder-text: "Username";
+            }
+            pass := LineEdit {
+                placeholder-text: "Password";
+                input-type: InputType.password;
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Button {
+                    text: "Log in";
+                    enabled: name.text != "" && pass.text != "";
+                    clicked => {
+                        root.login(name.text, pass.text);
+                    }
+                }
+                Button {
+                    text: "Create user";
+                    enabled: name.text != "" && pass.text != "";
+                    clicked => {
+                        root.create-user(name.text, pass.text);
+                    }
+                }
+            }
+        }
+
+        // ================= Chat view =================
+        if root.logged-in: VerticalLayout {
+            spacing: 8px;
+
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: "👤 " + root.current-user;
+                    vertical-alignment: center;
+                }
+                Rectangle { }
+                Button {
+                    text: "Log out";
+                    clicked => {
+                        root.logout();
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: "Session:";
+                    vertical-alignment: center;
+                }
+                ComboBox {
+                    model: root.sessions;
+                    current-value: root.current-session;
+                    selected(value) => {
+                        root.select-session(value);
+                    }
+                }
+                Button {
+                    text: "＋ New";
+                    clicked => {
+                        root.new-session-name = "";
+                        root.peer-keys-input = "";
+                        root.first-msg-input = "";
+                        root.my-keys = "";
+                        root.init-message = "";
+                        root.creating-session = true;
+                    }
+                }
+            }
+
+            // ---------- Session-creation wizard ----------
+            if root.creating-session: VerticalLayout {
+                spacing: 6px;
+
+                Text {
+                    text: "New session — manual key exchange";
+                    font-size: 15px;
+                }
+                LineEdit {
+                    placeholder-text: "Session name";
+                    text <=> root.new-session-name;
+                }
+                inbound := CheckBox {
+                    text: "Inbound (peer sent the first message)";
+                }
+
+                Button {
+                    text: "1. Generate my keys";
+                    clicked => {
+                        root.session-gen-keys();
+                    }
+                }
+                Text {
+                    text: "My keys — send these to your peer:";
+                    color: gray;
+                }
+                TextEdit {
+                    min-height: 54px;
+                    wrap: word-wrap;
+                    read-only: true;
+                    text: root.my-keys;
+                }
+
+                Text {
+                    text: "2. Peer's keys:";
+                    color: gray;
+                }
+                TextEdit {
+                    min-height: 54px;
+                    wrap: word-wrap;
+                    text <=> root.peer-keys-input;
+                }
+
+                if inbound.checked: VerticalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: "3. Peer's first (init) message:";
+                        color: gray;
+                    }
+                    TextEdit {
+                        min-height: 54px;
+                        wrap: word-wrap;
+                        text <=> root.first-msg-input;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    Button {
+                        text: "Create session";
+                        enabled: root.new-session-name != "" && root.peer-keys-input != "" && (!inbound.checked || root.first-msg-input != "");
+                        clicked => {
+                            root.session-create(root.new-session-name, inbound.checked, root.peer-keys-input, root.first-msg-input);
+                        }
+                    }
+                    Button {
+                        text: "Close";
+                        clicked => {
+                            root.creating-session = false;
+                        }
+                    }
+                }
+
+                if root.init-message != "": VerticalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: "Init message — send this to your peer:";
+                        color: gray;
+                    }
+                    TextEdit {
+                        min-height: 54px;
+                        wrap: word-wrap;
+                        read-only: true;
+                        text: root.init-message;
+                    }
+                }
+            }
+
+            // ---------- Normal chat ----------
+            if !root.creating-session: VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "History";
+                    color: gray;
+                }
+                ListView {
+                    min-height: 200px;
+                    for line in root.messages: Rectangle {
+                        height: row.preferred-height + 8px;
+                        row := Text {
+                            x: 4px;
+                            width: parent.width - 8px;
+                            text: "[" + line.time + "] " + line.sender + ": " + line.text;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                Text {
+                    text: "Message / incoming ciphertext";
+                    color: gray;
+                }
+                TextEdit {
+                    min-height: 64px;
+                    wrap: word-wrap;
+                    text <=> root.message-input;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Button {
+                        text: "Encrypt →";
+                        enabled: root.message-input != "";
+                        clicked => {
+                            root.do-encrypt(root.message-input);
+                        }
+                    }
+                    Button {
+                        text: "← Decrypt";
+                        enabled: root.message-input != "";
+                        clicked => {
+                            root.do-decrypt(root.message-input);
+                        }
+                    }
+                    Button {
+                        text: "Paste";
+                        clicked => {
+                            root.paste-input();
+                        }
+                    }
+                }
+
+                Text {
+                    text: "Outgoing ciphertext";
+                    color: gray;
+                }
+                TextEdit {
+                    min-height: 64px;
+                    wrap: word-wrap;
+                    read-only: true;
+                    text: root.output-text;
+                }
+                Button {
+                    text: "Copy ciphertext";
+                    enabled: root.output-text != "";
+                    clicked => {
+                        root.copy-output();
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: root.status-text;
+            color: gray;
+            wrap: word-wrap;
+        }
+    }
+}
