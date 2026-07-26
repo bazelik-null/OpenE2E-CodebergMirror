@@ -9,13 +9,15 @@
 
 use log::error;
 
-use crate::frontend::{cli::Application, logger};
-
 pub mod backend;
 pub mod error_mapper;
 pub mod frontend;
 
+// Default build: interactive CLI frontend.
+#[cfg(not(feature = "gui"))]
 fn main() {
+    use crate::frontend::{cli::Application, logger};
+
     // Set up logger
     logger::init().unwrap();
 
@@ -29,5 +31,17 @@ fn main() {
             }
         }
         Err(error) => error!("{}", error),
+    }
+}
+
+// `--features gui`: Slint desktop/mobile frontend.
+#[cfg(feature = "gui")]
+fn main() {
+    use crate::frontend::logger;
+
+    logger::init().unwrap();
+
+    if let Err(error) = frontend::gui::run() {
+        error!("{}", error);
     }
 }

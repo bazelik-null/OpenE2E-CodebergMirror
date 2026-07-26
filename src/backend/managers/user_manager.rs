@@ -226,6 +226,39 @@ impl UserManager {
         Ok(formatted_messages.join("\n"))
     }
 
+    /// Returns the current session's messages as (timestamp, sender, plaintext),
+    /// sorted ascending by time. Structured counterpart to `get_session_messages`.
+    pub fn get_session_history(&self) -> Result<Vec<(u64, String, String)>, String> {
+        let (session_name, encryption_key) = {
+            let user = self
+                .get_current_user()
+                .ok_or_else(|| "No user selected".to_string())?;
+            let session_name = user
+                .session_manager
+                .get_current_session()
+                .ok_or_else(|| "No session selected".to_string())?
+                .name
+                .clone();
+            (session_name, user.encryption_key)
+        };
+
+        let db = self.db_handle.worker();
+        let encrypted_messages = db.get_messages_by_session(&session_name)?;
+
+        let mut messages = Vec::new();
+        for encrypted_bytes in encrypted_messages {
+            if let Ok(msg) = Message::decrypt(&encryption_key, &encrypted_bytes) {
+                messages.push(msg);
+            }
+        }
+        messages.sort_by_key(|msg| msg.timestamp);
+
+        Ok(messages
+            .into_iter()
+            .map(|msg| (msg.timestamp, msg.sender, String::from_utf8_lossy(&msg.data).to_string()))
+            .collect())
+    }
+
     // Authentication
 
     /// Authenticates and loads a user by name and password

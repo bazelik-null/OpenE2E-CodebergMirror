@@ -7,6 +7,8 @@
  * (at your option) any later version.
  */
 
+mod commands;
+
 use colorize::AnsiColor;
 use log::{error, info};
 use std::io::{self, Write};
@@ -14,7 +16,7 @@ use std::io::{self, Write};
 use crate::backend::managers::user_manager::UserManager;
 use crate::backend::objects::session::SessionInstance;
 use crate::backend::objects::user::User;
-use crate::frontend::commands::{Command, scan_commands};
+use crate::frontend::cli::commands::{Command, scan_commands};
 use crate::frontend::localization::{Localization, fluent_args};
 
 const HEADER_WIDTH: usize = 34;
