@@ -7,9 +7,11 @@
  * (at your option) any later version.
  */
 
+#[cfg(not(feature = "gui"))]
 pub mod cli;
-mod commands;
+
 #[cfg(feature = "gui")]
 pub mod gui;
+
 mod localization;
 pub mod logger;

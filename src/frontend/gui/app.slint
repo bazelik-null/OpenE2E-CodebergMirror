@@ -5,7 +5,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import { Button, LineEdit, TextEdit, ComboBox, ListView, CheckBox } from "std-widgets.slint";
+import { Button, LineEdit, TextEdit, ComboBox, ListView, CheckBox, Palette } from "std-widgets.slint";
 
 // One rendered line in the chat transcript.
 export struct ChatLine {
@@ -14,9 +14,51 @@ export struct ChatLine {
     time: string,
 }
 
+// Localized static UI labels, filled from Rust (Fluent).
+export struct Strings {
+    login-as: string,
+    password: string,
+    log-in: string,
+    back: string,
+    select-user: string,
+    create-new-user: string,
+    username: string,
+    create-user: string,
+    log-out: string,
+    session: string,
+    new-session: string,
+    wizard-title: string,
+    session-name: string,
+    inbound: string,
+    gen-keys: string,
+    my-keys-label: string,
+    peer-keys-label: string,
+    first-msg-label: string,
+    create-session: string,
+    close: string,
+    init-msg-label: string,
+    history: string,
+    message-placeholder: string,
+    encrypt: string,
+    decrypt: string,
+    paste: string,
+    outgoing-label: string,
+    copy: string,
+}
+
+// Status / error line: red on error, gray otherwise.
+component StatusLine inherits Text {
+    in property <string> message;
+    in property <bool> is-error;
+    text: message;
+    color: is-error ? #e0554f : gray;
+    wrap: word-wrap;
+}
+
 export component MainWindow inherits Window {
     title: "OpenE2E";
     icon: @image-url("../../../doc/img/logo.png");
+    background: Palette.background;
     preferred-width: 460px;
     preferred-height: 760px;
     min-width: 360px;
@@ -24,73 +66,169 @@ export component MainWindow inherits Window {
 
     // ---- State, driven from Rust ----
     in-out property <bool> logged-in: false;
+    in-out property <[string]> users;
+    in-out property <string> login-user;
+    in-out property <string> confirm-delete-user;  // user whose delete is armed
     in-out property <string> current-user;
     in-out property <string> current-session;
     in-out property <[string]> sessions;
     in-out property <[ChatLine]> messages;
+    in-out property <int> message-count;
     in-out property <string> message-input;
     in-out property <string> output-text;
     in-out property <string> status-text;
+    in-out property <bool> status-is-error;
+
+    // ---- Localization ----
+    in property <Strings> t;
+    in-out property <string> language;  // current locale code ("en" / "ru")
 
     // ---- Session-creation wizard state ----
     in-out property <bool> creating-session: false;
     in-out property <string> new-session-name;
     in-out property <string> peer-keys-input;
     in-out property <string> first-msg-input;
-    in-out property <string> my-keys;      
+    in-out property <string> my-keys;
     in-out property <string> init-message;
 
     // ---- Callbacks into the Rust backend ----
-    callback login(string, string);   
+    callback login(string, string);
     callback create-user(string, string);
+    callback delete-user(string);
     callback logout();
     callback select-session(string);
     callback do-encrypt(string);
     callback do-decrypt(string);
+    callback submit-input(string);
+    callback delete-session(string);
     callback copy-output();
     callback paste-input();
     callback session-gen-keys();
     callback session-create(string, bool, string, string);
+    callback toggle-language();
 
     VerticalLayout {
         padding: 12px;
         spacing: 8px;
 
-        // ================= Login view =================
+        // ---- Login view ----
         if !root.logged-in: VerticalLayout {
             spacing: 8px;
+
+            HorizontalLayout {
+                Rectangle { }
+                Button {
+                    text: root.language == "en" ? "RU" : "EN";
+                    clicked => {
+                        root.toggle-language();
+                    }
+                }
+            }
             Text {
                 text: "OpenE2E";
                 font-size: 22px;
                 horizontal-alignment: center;
             }
-            name := LineEdit {
-                placeholder-text: "Username";
-            }
-            pass := LineEdit {
-                placeholder-text: "Password";
-                input-type: InputType.password;
-            }
-            HorizontalLayout {
+
+            // ---- Password prompt for the selected user ----
+            if root.login-user != "": VerticalLayout {
                 spacing: 8px;
-                Button {
-                    text: "Log in";
-                    enabled: name.text != "" && pass.text != "";
-                    clicked => {
-                        root.login(name.text, pass.text);
+                Text {
+                    text: root.t.login-as + " " + root.login-user;
+                    horizontal-alignment: center;
+                }
+                loginpass := LineEdit {
+                    placeholder-text: root.t.password;
+                    input-type: InputType.password;
+                    accepted => {
+                        root.login(root.login-user, self.text);
                     }
                 }
-                Button {
-                    text: "Create user";
-                    enabled: name.text != "" && pass.text != "";
-                    clicked => {
-                        root.create-user(name.text, pass.text);
+                HorizontalLayout {
+                    spacing: 8px;
+                    Button {
+                        text: root.t.log-in;
+                        enabled: loginpass.text != "";
+                        clicked => {
+                            root.login(root.login-user, loginpass.text);
+                        }
+                    }
+                    Button {
+                        text: root.t.back;
+                        clicked => {
+                            root.login-user = "";
+                        }
                     }
                 }
+            }
+
+            // ---- User list + create form ----
+            if root.login-user == "": VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: root.t.select-user;
+                    color: gray;
+                }
+                for user in root.users: HorizontalLayout {
+                    spacing: 8px;
+                    Button {
+                        text: user;
+                        clicked => {
+                            root.confirm-delete-user = "";
+                            root.status-text = "";
+                            root.login-user = user;
+                        }
+                    }
+                    Button {
+                        width: 44px;
+                        text: root.confirm-delete-user == user ? "✓" : "🗑";
+                        clicked => {
+                            if (root.confirm-delete-user == user) {
+                                root.delete-user(user);
+                                root.confirm-delete-user = "";
+                            } else {
+                                root.confirm-delete-user = user;
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 8px;
+                }
+
+                Text {
+                    text: root.t.create-new-user;
+                    color: gray;
+                }
+                newname := LineEdit {
+                    placeholder-text: root.t.username;
+                }
+                newpass := LineEdit {
+                    placeholder-text: root.t.password;
+                    input-type: InputType.password;
+                }
+                Button {
+                    text: root.t.create-user;
+                    enabled: newname.text != "" && newpass.text != "";
+                    clicked => {
+                        root.create-user(newname.text, newpass.text);
+                    }
+                }
+            }
+
+            // Status right under the content, then the filler pushes it up.
+            StatusLine {
+                message: root.status-text;
+                is-error: root.status-is-error;
+            }
+            Rectangle {
+                vertical-stretch: 1;
             }
         }
 
-        // ================= Chat view =================
+        // ---- Chat view ----
         if root.logged-in: VerticalLayout {
             spacing: 8px;
 
@@ -102,7 +240,13 @@ export component MainWindow inherits Window {
                 }
                 Rectangle { }
                 Button {
-                    text: "Log out";
+                    text: root.language == "en" ? "RU" : "EN";
+                    clicked => {
+                        root.toggle-language();
+                    }
+                }
+                Button {
+                    text: root.t.log-out;
                     clicked => {
                         root.logout();
                     }
@@ -112,7 +256,7 @@ export component MainWindow inherits Window {
             HorizontalLayout {
                 spacing: 8px;
                 Text {
-                    text: "Session:";
+                    text: root.t.session;
                     vertical-alignment: center;
                 }
                 ComboBox {
@@ -123,7 +267,7 @@ export component MainWindow inherits Window {
                     }
                 }
                 Button {
-                    text: "＋ New";
+                    text: root.t.new-session;
                     clicked => {
                         root.new-session-name = "";
                         root.peer-keys-input = "";
@@ -133,6 +277,13 @@ export component MainWindow inherits Window {
                         root.creating-session = true;
                     }
                 }
+                Button {
+                    text: "🗑";
+                    enabled: root.current-session != "";
+                    clicked => {
+                        root.delete-session(root.current-session);
+                    }
+                }
             }
 
             // ---------- Session-creation wizard ----------
@@ -140,25 +291,25 @@ export component MainWindow inherits Window {
                 spacing: 6px;
 
                 Text {
-                    text: "New session — manual key exchange";
+                    text: root.t.wizard-title;
                     font-size: 15px;
                 }
                 LineEdit {
-                    placeholder-text: "Session name";
+                    placeholder-text: root.t.session-name;
                     text <=> root.new-session-name;
                 }
                 inbound := CheckBox {
-                    text: "Inbound (peer sent the first message)";
+                    text: root.t.inbound;
                 }
 
                 Button {
-                    text: "1. Generate my keys";
+                    text: root.t.gen-keys;
                     clicked => {
                         root.session-gen-keys();
                     }
                 }
                 Text {
-                    text: "My keys — send these to your peer:";
+                    text: root.t.my-keys-label;
                     color: gray;
                 }
                 TextEdit {
@@ -169,7 +320,7 @@ export component MainWindow inherits Window {
                 }
 
                 Text {
-                    text: "2. Peer's keys:";
+                    text: root.t.peer-keys-label;
                     color: gray;
                 }
                 TextEdit {
@@ -181,7 +332,7 @@ export component MainWindow inherits Window {
                 if inbound.checked: VerticalLayout {
                     spacing: 6px;
                     Text {
-                        text: "3. Peer's first (init) message:";
+                        text: root.t.first-msg-label;
                         color: gray;
                     }
                     TextEdit {
@@ -194,14 +345,14 @@ export component MainWindow inherits Window {
                 HorizontalLayout {
                     spacing: 8px;
                     Button {
-                        text: "Create session";
+                        text: root.t.create-session;
                         enabled: root.new-session-name != "" && root.peer-keys-input != "" && (!inbound.checked || root.first-msg-input != "");
                         clicked => {
                             root.session-create(root.new-session-name, inbound.checked, root.peer-keys-input, root.first-msg-input);
                         }
                     }
                     Button {
-                        text: "Close";
+                        text: root.t.close;
                         clicked => {
                             root.creating-session = false;
                         }
@@ -211,7 +362,7 @@ export component MainWindow inherits Window {
                 if root.init-message != "": VerticalLayout {
                     spacing: 6px;
                     Text {
-                        text: "Init message — send this to your peer:";
+                        text: root.t.init-msg-label;
                         color: gray;
                     }
                     TextEdit {
@@ -221,6 +372,14 @@ export component MainWindow inherits Window {
                         text: root.init-message;
                     }
                 }
+
+                StatusLine {
+                    message: root.status-text;
+                    is-error: root.status-is-error;
+                }
+                Rectangle {
+                    vertical-stretch: 1;
+                }
             }
 
             // ---------- Normal chat ----------
@@ -228,11 +387,17 @@ export component MainWindow inherits Window {
                 spacing: 8px;
 
                 Text {
-                    text: "History";
+                    text: root.t.history;
                     color: gray;
                 }
-                ListView {
+                list := ListView {
                     min-height: 200px;
+                    // Local mirror of the root property so `changed` can observe it.
+                    property <int> msg-count: root.message-count;
+                    // Auto-scroll to the newest message when the count changes.
+                    changed msg-count => {
+                        self.viewport-y = min(0px, self.height - self.viewport-height);
+                    }
                     for line in root.messages: Rectangle {
                         height: row.preferred-height + 8px;
                         row := Text {
@@ -244,33 +409,31 @@ export component MainWindow inherits Window {
                     }
                 }
 
-                Text {
-                    text: "Message / incoming ciphertext";
-                    color: gray;
-                }
-                TextEdit {
-                    min-height: 64px;
-                    wrap: word-wrap;
+                LineEdit {
+                    placeholder-text: root.t.message-placeholder;
                     text <=> root.message-input;
+                    accepted => {
+                        root.submit-input(self.text);
+                    }
                 }
                 HorizontalLayout {
                     spacing: 8px;
                     Button {
-                        text: "Encrypt →";
+                        text: root.t.encrypt;
                         enabled: root.message-input != "";
                         clicked => {
                             root.do-encrypt(root.message-input);
                         }
                     }
                     Button {
-                        text: "← Decrypt";
+                        text: root.t.decrypt;
                         enabled: root.message-input != "";
                         clicked => {
                             root.do-decrypt(root.message-input);
                         }
                     }
                     Button {
-                        text: "Paste";
+                        text: root.t.paste;
                         clicked => {
                             root.paste-input();
                         }
@@ -278,7 +441,7 @@ export component MainWindow inherits Window {
                 }
 
                 Text {
-                    text: "Outgoing ciphertext";
+                    text: root.t.outgoing-label;
                     color: gray;
                 }
                 TextEdit {
@@ -288,19 +451,18 @@ export component MainWindow inherits Window {
                     text: root.output-text;
                 }
                 Button {
-                    text: "Copy ciphertext";
+                    text: root.t.copy;
                     enabled: root.output-text != "";
                     clicked => {
                         root.copy-output();
                     }
                 }
-            }
-        }
 
-        Text {
-            text: root.status-text;
-            color: gray;
-            wrap: word-wrap;
+                StatusLine {
+                    message: root.status-text;
+                    is-error: root.status-is-error;
+                }
+            }
         }
     }
 }

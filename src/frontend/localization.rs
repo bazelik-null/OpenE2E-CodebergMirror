@@ -27,7 +27,7 @@ impl Localization {
         let locales = Self::embedded_locales();
 
         for (locale_code, ftl_content) in locales {
-            match Self::create_bundle(&locale_code, ftl_content) {
+            match Self::create_bundle(&locale_code, &ftl_content) {
                 Ok(bundle) => {
                     bundles.insert(locale_code.clone(), bundle);
                     available_locales.push(locale_code);
@@ -60,15 +60,23 @@ impl Localization {
 
     /// All embedded locale resources
     /// TODO: Hardcoding locale dir is not good
-    fn embedded_locales() -> Vec<(String, &'static str)> {
+    fn embedded_locales() -> Vec<(String, String)> {
         vec![
             (
                 "en".to_string(),
-                include_str!("../../locales/en-US/cli.ftl"),
+                format!(
+                    "{}\n{}",
+                    include_str!("../../locales/en-US/cli.ftl"),
+                    include_str!("../../locales/en-US/gui.ftl"),
+                ),
             ),
             (
                 "ru".to_string(),
-                include_str!("../../locales/ru-RU/cli.ftl"),
+                format!(
+                    "{}\n{}",
+                    include_str!("../../locales/ru-RU/cli.ftl"),
+                    include_str!("../../locales/ru-RU/gui.ftl"),
+                ),
             ),
         ]
     }
@@ -157,6 +165,7 @@ impl Localization {
 }
 
 /// Create FluentArgs from string pairs
+#[cfg_attr(feature = "gui", allow(dead_code))]
 pub fn fluent_args(pairs: &[(&str, &str)]) -> FluentArgs<'static> {
     let mut args = FluentArgs::new();
     for (key, value) in pairs {
