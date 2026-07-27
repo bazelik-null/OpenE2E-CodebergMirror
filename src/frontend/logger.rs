@@ -15,8 +15,11 @@ pub struct OpenE2ELogger;
 #[cfg(debug_assertions)]
 const DEBUG_LEVEL: Level = Level::Debug;
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), not(feature = "gui")))]
 const DEBUG_LEVEL: Level = Level::Error;
+
+#[cfg(all(not(debug_assertions), feature = "gui"))]
+const DEBUG_LEVEL: Level = Level::Info;
 
 impl Log for OpenE2ELogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
