@@ -5,7 +5,7 @@
 
 > [!WARNING]
 >
-> Проект в активной разработке. Не готов к использованию в продакшене.
+> Проект в активной разработке.
 > См. [дорожную карту](#дорожная-карта).
 
 **Languages:** [English](../README.md) | [Русский](README.ru.md)
@@ -107,6 +107,20 @@ cargo build --release
 - [ ] Улучшенный GUI
 - [ ] Режим маскировки
 - [ ] Пакетирование и релизные сборки
+
+# Скриншоты
+
+### Управление пользователями
+![User list and creation](./img/screenshots/users.jpg)
+
+### Вход
+![Login page](./img/screenshots/login.jpg)
+
+### Создание сессии
+![Session creation](./img/screenshots/session.jpg)
+
+### Чат
+![Chatting](./img/screenshots/chat.jpg)
 
 # Лицензия
 

@@ -21,7 +21,7 @@ use crate::frontend::localization::{Localization, fluent_args};
 
 const HEADER_WIDTH: usize = 34;
 const SECTION_WIDTH: usize = 40;
-const VERSION: &str = "v0.7";
+const VERSION: &str = "v1.0";
 
 pub struct Application {
     user_manager: UserManager,

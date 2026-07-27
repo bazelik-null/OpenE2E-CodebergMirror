@@ -5,7 +5,7 @@
 
 > [!WARNING]
 >
-> Under active development. Not ready for production use yet.
+> Under active development.
 > See the [Roadmap](#roadmap).
 
 **Languages:** [English](README.md) | [Русский](doc/README.ru.md)
@@ -107,6 +107,20 @@ All encryption keys are derived from your user password and stored in memory dur
 - [ ] Improved GUI
 - [ ] Obfuscation mode
 - [ ] Packaging and release builds
+
+# Screenshots
+
+### User Management
+![User list and creation](./doc/img/screenshots/users.jpg)
+
+### Login
+![Login page](./doc/img/screenshots/login.jpg)
+
+### Session Creation
+![Session creation](./doc/img/screenshots/session.jpg)
+
+### Chat
+![Chatting](./doc/img/screenshots/chat.jpg)
 
 # License
 
