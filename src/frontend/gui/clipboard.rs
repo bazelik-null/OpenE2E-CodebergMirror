@@ -12,39 +12,53 @@ use slint::ComponentHandle;
 use super::{Localizer, MainWindow, fail, status};
 
 pub(super) fn wire_clipboard(ui: &MainWindow, loc: &Localizer) {
-    {
-        let ui_weak = ui.as_weak();
-        let loc = loc.clone();
-        ui.on_copy_output(move || {
-            let ui = ui_weak.unwrap();
-            let text = ui.get_output_text();
-            if text.is_empty() {
-                return;
-            }
-            match set_clipboard(text.as_str()) {
-                Ok(()) => status(&ui, &loc, "status-copied"),
-                Err(e) => clipboard_error(&ui, &loc, &e),
-            }
-        });
-    }
-
-    {
-        let ui_weak = ui.as_weak();
-        let loc = loc.clone();
-        ui.on_paste_input(move || {
-            let ui = ui_weak.unwrap();
-            match get_clipboard() {
-                Ok(text) => {
-                    ui.set_message_input(text.into());
-                    status(&ui, &loc, "status-pasted");
-                }
-                Err(e) => clipboard_error(&ui, &loc, &e),
-            }
-        });
-    }
+    wire_copy_output(ui, loc);
+    wire_paste_input(ui, loc);
 }
 
-fn clipboard_error(ui: &MainWindow, loc: &Localizer, err: &str) {
+// Copy Output to Clipboard
+
+fn wire_copy_output(ui: &MainWindow, loc: &Localizer) {
+    let ui_weak = ui.as_weak();
+    let loc = loc.clone();
+
+    ui.on_copy_output(move || {
+        let ui = ui_weak.unwrap();
+        let text = ui.get_output_text();
+
+        if text.is_empty() {
+            return;
+        }
+
+        match set_clipboard(text.as_str()) {
+            Ok(()) => status(&ui, &loc, "status-copied"),
+            Err(e) => handle_clipboard_error(&ui, &loc, &e),
+        }
+    });
+}
+
+// Paste Input from Clipboard
+
+fn wire_paste_input(ui: &MainWindow, loc: &Localizer) {
+    let ui_weak = ui.as_weak();
+    let loc = loc.clone();
+
+    ui.on_paste_input(move || {
+        let ui = ui_weak.unwrap();
+
+        match get_clipboard() {
+            Ok(text) => {
+                ui.set_message_input(text.into());
+                status(&ui, &loc, "status-pasted");
+            }
+            Err(e) => handle_clipboard_error(&ui, &loc, &e),
+        }
+    });
+}
+
+// Utilities
+
+fn handle_clipboard_error(ui: &MainWindow, loc: &Localizer, err: &str) {
     let prefix = loc.borrow().get("status-clipboard-error");
     fail(ui, &format!("{}: {}", prefix, err));
 }
@@ -55,6 +69,7 @@ fn set_clipboard(text: &str) -> Result<(), String> {
         .set_text(text.to_string())
         .map_err(|e| e.to_string())
 }
+
 fn get_clipboard() -> Result<String, String> {
     let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     clipboard.get_text().map_err(|e| e.to_string())

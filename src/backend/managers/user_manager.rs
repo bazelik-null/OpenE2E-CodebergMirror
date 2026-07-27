@@ -255,7 +255,13 @@ impl UserManager {
 
         Ok(messages
             .into_iter()
-            .map(|msg| (msg.timestamp, msg.sender, String::from_utf8_lossy(&msg.data).to_string()))
+            .map(|msg| {
+                (
+                    msg.timestamp,
+                    msg.sender,
+                    String::from_utf8_lossy(&msg.data).to_string(),
+                )
+            })
             .collect())
     }
 

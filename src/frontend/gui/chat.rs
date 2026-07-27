@@ -10,63 +10,33 @@
 use slint::{ComponentHandle, SharedString};
 
 use super::{
-    Localizer, MainWindow, Manager, Messages, fail, fail_key, history_lines, refresh_messages,
+    Localizer, MainWindow, Manager, Messages, fail, fail_key, get_chat_history, refresh_messages,
     status,
 };
 
 pub(super) fn wire_chat(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
-    {
-        let ui_weak = ui.as_weak();
-        let manager = manager.clone();
-        let messages = messages.clone();
-        let loc = loc.clone();
-        ui.on_do_encrypt(move |plaintext| {
-            encrypt_op(
-                &ui_weak.unwrap(),
-                &manager,
-                &messages,
-                &loc,
-                plaintext.as_str(),
-            );
-        });
-    }
+    wire_encrypt(ui, manager, messages, loc);
+    wire_decrypt(ui, manager, messages, loc);
+    wire_submit_input(ui, manager, messages, loc);
+}
 
-    {
-        let ui_weak = ui.as_weak();
-        let manager = manager.clone();
-        let messages = messages.clone();
-        let loc = loc.clone();
-        ui.on_do_decrypt(move |ciphertext| {
-            decrypt_op(
-                &ui_weak.unwrap(),
-                &manager,
-                &messages,
-                &loc,
-                ciphertext.as_str(),
-            );
-        });
-    }
+// Encrypt
 
-    // Enter in the input field: auto-route by content. An OLM ciphertext decodes
-    // as base64; plaintext does not. Empty input is reported, not silently ignored.
-    {
-        let ui_weak = ui.as_weak();
-        let manager = manager.clone();
-        let messages = messages.clone();
-        let loc = loc.clone();
-        ui.on_submit_input(move |text| {
-            let ui = ui_weak.unwrap();
-            if text.trim().is_empty() {
-                fail_key(&ui, &loc, "status-nothing");
-                return;
-            }
-            if looks_like_ciphertext(text.as_str()) {
-                decrypt_op(&ui, &manager, &messages, &loc, text.as_str());
-            } else {
-                encrypt_op(&ui, &manager, &messages, &loc, text.as_str());
-            }
-        });
-    }
+fn wire_encrypt(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+    let ui_weak = ui.as_weak();
+    let manager = manager.clone();
+    let messages = messages.clone();
+    let loc = loc.clone();
+
+    ui.on_do_encrypt(move |plaintext| {
+        encrypt_op(
+            &ui_weak.unwrap(),
+            &manager,
+            &messages,
+            &loc,
+            plaintext.as_str(),
+        );
+    });
 }
 
 fn encrypt_op(
@@ -79,15 +49,17 @@ fn encrypt_op(
     if plaintext.is_empty() {
         return;
     }
+
     let result = {
         let mut mgr = manager.borrow_mut();
         mgr.encrypt(plaintext).map(|ciphertext| {
             if let Err(e) = mgr.autosave() {
-                log::error!("autosave after encrypt failed: {}", e);
+                log::error!("Autosave after encrypt failed: {}", e);
             }
-            (ciphertext, history_lines(&mgr))
+            (ciphertext, get_chat_history(&mgr))
         })
     };
+
     match result {
         Ok((ciphertext, lines)) => {
             ui.set_output_text(ciphertext.into());
@@ -97,6 +69,25 @@ fn encrypt_op(
         }
         Err(e) => fail(ui, &e),
     }
+}
+
+// Decrypt
+
+fn wire_decrypt(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+    let ui_weak = ui.as_weak();
+    let manager = manager.clone();
+    let messages = messages.clone();
+    let loc = loc.clone();
+
+    ui.on_do_decrypt(move |ciphertext| {
+        decrypt_op(
+            &ui_weak.unwrap(),
+            &manager,
+            &messages,
+            &loc,
+            ciphertext.as_str(),
+        );
+    });
 }
 
 fn decrypt_op(
@@ -109,15 +100,17 @@ fn decrypt_op(
     if ciphertext.is_empty() {
         return;
     }
+
     let result = {
         let mut mgr = manager.borrow_mut();
         mgr.decrypt(ciphertext).map(|_plaintext| {
             if let Err(e) = mgr.autosave() {
-                log::error!("autosave after decrypt failed: {}", e);
+                log::error!("Autosave after encrypt failed: {}", e);
             }
-            history_lines(&mgr)
+            get_chat_history(&mgr)
         })
     };
+
     match result {
         Ok(lines) => {
             ui.set_message_input(SharedString::new());
@@ -128,21 +121,37 @@ fn decrypt_op(
     }
 }
 
+// Submit Input
+
+fn wire_submit_input(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+    let ui_weak = ui.as_weak();
+    let manager = manager.clone();
+    let messages = messages.clone();
+    let loc = loc.clone();
+
+    ui.on_submit_input(move |text| {
+        let ui = ui_weak.unwrap();
+
+        if text.trim().is_empty() {
+            fail_key(&ui, &loc, "status-nothing");
+            return;
+        }
+
+        if looks_like_ciphertext(text.as_str()) {
+            decrypt_op(&ui, &manager, &messages, &loc, text.as_str());
+        } else {
+            encrypt_op(&ui, &manager, &messages, &loc, text.as_str());
+        }
+    });
+}
+
+// Utilities
+
 fn looks_like_ciphertext(text: &str) -> bool {
     use vodozemac::olm::{Message, PreKeyMessage};
 
     let text = text.trim();
-    if PreKeyMessage::from_base64(text).is_ok() || Message::from_base64(text).is_ok() {
-        return true;
-    }
 
-    if text.len() < 40 {
-        return false;
-    }
-    let base64ish = text
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '='))
-        .count();
-    // At least 90% base64-like characters => almost certainly a (broken) ciphertext.
-    base64ish * 10 >= text.len() * 9
+    // Try parsing as OLM ciphertext
+    PreKeyMessage::from_base64(text).is_ok() || Message::from_base64(text).is_ok()
 }

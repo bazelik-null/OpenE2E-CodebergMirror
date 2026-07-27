@@ -23,144 +23,160 @@ mod clipboard;
 mod i18n;
 mod session;
 
+// Type aliases for wrappers
 type Manager = Rc<RefCell<UserManager>>;
 type Messages = Rc<VecModel<ChatLine>>;
 type Localizer = Rc<RefCell<Localization>>;
 
-/// Launches the Slint GUI frontend.
-///
-/// `UserManager` lives on the UI (main) thread inside an `Rc<RefCell<…>>`; every
-/// callback runs on that same thread, so there is no cross-thread sharing. Each
-/// callback mutates the manager inside a short borrow scope, then pushes the new
-/// state back into the window through setters.
+// Public API
+
+/// Launches the Slint GUI frontend
 pub fn run() -> Result<(), String> {
     force_software_renderer();
 
     let ui = MainWindow::new().map_err(|e| e.to_string())?;
-    let manager: Manager = Rc::new(RefCell::new(UserManager::new()?));
-    let messages: Messages = Rc::new(VecModel::default());
-    ui.set_messages(ModelRc::from(messages.clone()));
-    refresh_users(&ui, &manager);
+    let manager = Rc::new(RefCell::new(UserManager::new()?));
+    let messages = Rc::new(VecModel::default());
 
-    let loc: Localizer = Rc::new(RefCell::new(Localization::new("en")?));
-    ui.set_t(i18n::build_strings(&loc.borrow()));
-    ui.set_language("en".into());
-
-    auth::wire_auth(&ui, &manager, &messages, &loc);
-    session::wire_session(&ui, &manager, &messages, &loc);
-    chat::wire_chat(&ui, &manager, &messages, &loc);
-    clipboard::wire_clipboard(&ui, &loc);
-    wire_language(&ui, &loc);
+    initialize_ui(&ui, &manager, &messages)?;
+    wire_callbacks(&ui, &manager, &messages);
 
     ui.run().map_err(|e| e.to_string())?;
 
-    shutdown(ui, manager);
+    cleanup(ui, manager);
     Ok(())
 }
 
-/// The default FemtoVG (OpenGL) renderer leaves the window invisible on machines
-/// with limited GL (VMs, RDP, some GPU drivers). Default to the software
-/// renderer, which needs no GPU, unless the user overrides it.
-fn force_software_renderer() {
-    if std::env::var_os("SLINT_BACKEND").is_none() {
-        // Safe: called before any other thread is spawned.
-        unsafe { std::env::set_var("SLINT_BACKEND", "winit-software") };
-    }
+// Initialization
+
+fn initialize_ui(ui: &MainWindow, manager: &Manager, messages: &Messages) -> Result<(), String> {
+    ui.set_messages(ModelRc::from(messages.clone()));
+    refresh_users(ui, manager);
+
+    let loc = Rc::new(RefCell::new(Localization::new("en")?));
+    ui.set_t(i18n::build_strings(&loc.borrow()));
+    ui.set_language("en".into());
+
+    Ok(())
 }
 
-/// Flush state and stop the autosave worker cleanly. Dropping `ui` releases the
-/// callback closures holding the other `Rc` clones, so the manager can be
-/// reclaimed and consumed by `shutdown(self)`.
-fn shutdown(ui: MainWindow, manager: Manager) {
+fn wire_callbacks(ui: &MainWindow, manager: &Manager, messages: &Messages) {
+    let loc = Rc::new(RefCell::new(Localization::new("en").unwrap()));
+
+    auth::wire_auth(ui, manager, messages, &loc);
+    session::wire_session(ui, manager, messages, &loc);
+    chat::wire_chat(ui, manager, messages, &loc);
+    clipboard::wire_clipboard(ui, &loc);
+    wire_language(ui, &loc);
+}
+
+// Shutdown & Cleanup
+
+/// Flush state and stop the autosave worker cleanly
+fn cleanup(ui: MainWindow, manager: Manager) {
     drop(ui);
+
     match Rc::try_unwrap(manager) {
         Ok(cell) => {
             if let Err(e) = cell.into_inner().shutdown() {
-                log::error!("shutdown failed: {}", e);
+                log::error!("Shutdown failed: {}", e);
             }
         }
         Err(rc) => {
             if let Err(e) = rc.borrow_mut().autosave() {
-                log::error!("final autosave failed: {}", e);
+                log::error!("Final autosave failed: {}", e);
             }
         }
     }
 }
 
-/// Sets a localized success/info status message (rendered in gray).
+// Status Messages
+
+/// Sets a localized success/info status message
 fn status(ui: &MainWindow, loc: &Localizer, key: &str) {
-    ui.set_status_text(loc.borrow().get(key).into());
+    let message = loc.borrow().get(key);
+    ui.set_status_text(message.into());
     ui.set_status_is_error(false);
 }
 
-/// Sets a localized error status message (rendered in red).
+/// Sets a localized error status message
 fn fail_key(ui: &MainWindow, loc: &Localizer, key: &str) {
-    fail(ui, &loc.borrow().get(key));
+    let message = loc.borrow().get(key);
+    fail(ui, &message);
 }
 
-/// Sets a raw error status message (rendered in red).
+/// Sets a raw error status message
 fn fail(ui: &MainWindow, msg: &str) {
     ui.set_status_text(msg.into());
     ui.set_status_is_error(true);
 }
 
-/// Wires the language toggle (en ⇄ ru) and rebuilds the static strings on switch.
+// UI Wiring
+
+/// Wires the language toggle and rebuilds static strings on switch
 fn wire_language(ui: &MainWindow, loc: &Localizer) {
     let ui_weak = ui.as_weak();
     let loc = loc.clone();
+
     ui.on_toggle_language(move || {
-        let ui = ui_weak.unwrap();
-        let next = if ui.get_language() == "en" { "ru" } else { "en" };
-        {
-            let mut l = loc.borrow_mut();
-            if let Err(e) = l.set_locale(next) {
-                log::error!("set_locale failed: {}", e);
-                return;
-            }
+        let ui = match ui_weak.upgrade() {
+            Some(ui) => ui,
+            None => return,
+        };
+
+        let current_lang = ui.get_language();
+        let next_lang = if current_lang == "en" { "ru" } else { "en" };
+
+        let mut localizer = loc.borrow_mut();
+        if let Err(e) = localizer.set_locale(next_lang) {
+            log::error!("Failed to set locale: {}", e);
+            return;
         }
+        drop(localizer);
+
         ui.set_t(i18n::build_strings(&loc.borrow()));
-        ui.set_language(next.into());
+        ui.set_language(next_lang.into());
     });
 }
 
-/// Session names of the currently logged-in user (empty if none).
-fn session_names(mgr: &UserManager) -> Vec<SharedString> {
-    mgr.get_current_user()
-        .map(|user| {
-            user.session_manager
-                .get_session_names()
-                .into_iter()
-                .map(SharedString::from)
-                .collect()
-        })
+// Data Retrieval & Transformation
+
+/// Gets the session names of the currently logged-in user
+fn get_session_names(manager: &UserManager) -> Vec<SharedString> {
+    manager
+        .get_current_user()
+        .map(|user| user.session_manager.get_session_names())
+        .map(|names| names.into_iter().map(SharedString::from).collect())
         .unwrap_or_default()
 }
 
-/// Decrypted transcript of the current session as renderable chat lines.
-fn history_lines(mgr: &UserManager) -> Vec<ChatLine> {
-    mgr.get_session_history()
+/// Gets the decrypted transcript of the current session as chat lines
+fn get_chat_history(manager: &UserManager) -> Vec<ChatLine> {
+    manager
+        .get_session_history()
         .map(|items| {
             items
                 .into_iter()
-                .map(|(ts, sender, text)| ChatLine {
+                .map(|(timestamp, sender, text)| ChatLine {
                     sender: sender.into(),
                     text: text.into(),
-                    time: fmt_time(ts),
+                    time: format_timestamp(timestamp),
                 })
                 .collect()
         })
         .unwrap_or_default()
 }
 
-/// Replaces the transcript model and updates `message-count`, which drives the
-/// auto-scroll-to-bottom in the UI.
+// UI Updates
+
+/// Refreshes the transcript model and updates message count for auto-scroll
 fn refresh_messages(ui: &MainWindow, messages: &Messages, lines: Vec<ChatLine>) {
     let count = lines.len() as i32;
     messages.set_vec(lines);
     ui.set_message_count(count);
 }
 
-/// Refreshes the list of existing usernames shown on the login screen.
+/// Refreshes the list of existing usernames shown on the login screen
 fn refresh_users(ui: &MainWindow, manager: &Manager) {
     let users = {
         let mgr = manager.borrow();
@@ -172,10 +188,22 @@ fn refresh_users(ui: &MainWindow, manager: &Manager) {
     ui.set_users(ModelRc::new(VecModel::from(users)));
 }
 
-/// Formats a Unix timestamp (seconds) as local `YYYY-MM-DD HH:MM`.
-fn fmt_time(ts: u64) -> SharedString {
-    let dt = chrono::DateTime::<chrono::Local>::from(
+// Utilities
+
+/// Ensures the software renderer is used if no backend is explicitly set
+/// The default FemtoVG (OpenGL) renderer leaves the window invisible on machines with limited GL support (VMs, RDP, some GPU drivers)
+/// This sets the software renderer as the default, which requires no GPU
+fn force_software_renderer() {
+    if std::env::var_os("SLINT_BACKEND").is_none() {
+        // SAFETY: Called before any other thread is spawned.
+        unsafe { std::env::set_var("SLINT_BACKEND", "winit-software") };
+    }
+}
+
+/// Formats a Unix timestamp as local time
+fn format_timestamp(ts: u64) -> SharedString {
+    let datetime = chrono::DateTime::<chrono::Local>::from(
         std::time::UNIX_EPOCH + std::time::Duration::from_secs(ts),
     );
-    dt.format("%Y-%m-%d %H:%M").to_string().into()
+    datetime.format("%Y-%m-%d %H:%M").to_string().into()
 }
