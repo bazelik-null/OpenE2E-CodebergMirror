@@ -1,4 +1,4 @@
-# GUI — статические подписи
+# GUI - статические подписи
 gui-login-as = Войти как
 gui-password = Пароль
 gui-log-in = Войти
@@ -8,42 +8,42 @@ gui-create-new-user = Создать пользователя
 gui-username = Имя пользователя
 gui-create-user = Создать
 gui-log-out = Выйти
-gui-session = Сеанс:
-gui-new-session = ＋ Новый
-gui-wizard-title = Новый сеанс — обмен ключами вручную
-gui-session-name = Название сеанса
+gui-session = Сессия:
+gui-new-session = + Создать
+gui-wizard-title = Создание сессии - обмен ключами вручную
+gui-session-name = Название сессии
 gui-inbound = Входящий (собеседник прислал первое сообщение)
-gui-gen-keys = 1. Сгенерировать мои ключи
-gui-my-keys-label = Мои ключи — отправьте их собеседнику:
+gui-gen-keys = 1. Сгенерировать ваши ключи
+gui-my-keys-label = Ваши ключи - отправьте их собеседнику:
 gui-peer-keys-label = 2. Ключи собеседника:
 gui-first-msg-label = 3. Первое (инициализирующее) сообщение собеседника:
-gui-create-session = Создать сеанс
+gui-create-session = Создать сессию
 gui-close = Закрыть
-gui-init-msg-label = Инициализирующее сообщение — отправьте его собеседнику:
+gui-init-msg-label = Инициализирующее сообщение - отправьте его собеседнику:
 gui-history = История
-gui-message-placeholder = Введите сообщение или вставьте шифртекст (Enter — отправить)
+gui-message-placeholder = Введите сообщение или вставьте шифр (Enter - отправить)
 gui-encrypt = Зашифровать →
 gui-decrypt = ← Расшифровать
 gui-paste = Вставить
-gui-outgoing-label = Исходящий шифртекст
-gui-copy = Копировать шифртекст
+gui-outgoing-label = Исходящий шифр
+gui-copy = Копировать шифр
 
-# GUI — статус-сообщения
+# GUI - статус-сообщения
 status-credentials-required = Введите имя пользователя и пароль
 status-logged-in = Вход выполнен
 status-user-created = Пользователь создан
 status-logged-out = Выход выполнен
 status-user-deleted = Пользователь удалён
 status-session-opened = Сеанс открыт
-status-keys-generated = Ключи сгенерированы — отправьте их собеседнику и вставьте его ключи
+status-keys-generated = Ключи сгенерированы - отправьте их собеседнику и вставьте его ключи
 status-session-name-required = Укажите название сеанса
 status-peer-keys-required = Нужны ключи собеседника
 status-first-msg-required = Для входящего сеанса нужно первое сообщение собеседника
-status-outbound-created = Исходящий сеанс создан — отправьте инициализирующее сообщение собеседнику
+status-outbound-created = Исходящий сеанс создан - отправьте инициализирующее сообщение собеседнику
 status-inbound-created = Входящий сеанс создан
 status-session-deleted = Сеанс удалён
 status-nothing = Нечего шифровать или расшифровывать
-status-encrypted = Зашифровано — скопируйте шифртекст ниже
+status-encrypted = Зашифровано - скопируйте шифртекст ниже
 status-decrypted = Расшифровано
 status-copied = Скопировано в буфер обмена
 status-pasted = Вставлено из буфера обмена

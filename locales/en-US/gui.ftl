@@ -1,4 +1,4 @@
-# GUI — static labels
+# GUI - static labels
 gui-login-as = Log in as
 gui-password = Password
 gui-log-in = Log in
@@ -9,17 +9,17 @@ gui-username = Username
 gui-create-user = Create user
 gui-log-out = Log out
 gui-session = Session:
-gui-new-session = ＋ New
-gui-wizard-title = New session — manual key exchange
+gui-new-session = + New
+gui-wizard-title = New session - manual key exchange
 gui-session-name = Session name
 gui-inbound = Inbound (peer sent the first message)
-gui-gen-keys = 1. Generate my keys
-gui-my-keys-label = My keys — send these to your peer:
+gui-gen-keys = 1. Generate your keys
+gui-my-keys-label = Your keys - send these to your peer:
 gui-peer-keys-label = 2. Peer's keys:
 gui-first-msg-label = 3. Peer's first (init) message:
 gui-create-session = Create session
 gui-close = Close
-gui-init-msg-label = Init message — send this to your peer:
+gui-init-msg-label = Init message - send this to your peer:
 gui-history = History
 gui-message-placeholder = Type a message, or paste ciphertext (Enter to send)
 gui-encrypt = Encrypt →
@@ -28,22 +28,22 @@ gui-paste = Paste
 gui-outgoing-label = Outgoing ciphertext
 gui-copy = Copy ciphertext
 
-# GUI — status messages
+# GUI - status messages
 status-credentials-required = Username and password are required
 status-logged-in = Logged in
 status-user-created = User created
 status-logged-out = Logged out
 status-user-deleted = User deleted
 status-session-opened = Session opened
-status-keys-generated = Keys generated — send them to your peer, then paste theirs
+status-keys-generated = Keys generated - send them to your peer, then paste theirs
 status-session-name-required = Session name is required
 status-peer-keys-required = Peer's keys are required
 status-first-msg-required = Peer's first message is required for an inbound session
-status-outbound-created = Outbound session created — send the init message to your peer
+status-outbound-created = Outbound session created - send the init message to your peer
 status-inbound-created = Inbound session created
 status-session-deleted = Session deleted
 status-nothing = Nothing to encrypt or decrypt
-status-encrypted = Encrypted — copy the ciphertext below
+status-encrypted = Encrypted - copy the ciphertext below
 status-decrypted = Decrypted
 status-copied = Copied to clipboard
 status-pasted = Pasted from clipboard

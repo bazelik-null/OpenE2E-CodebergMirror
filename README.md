@@ -28,7 +28,7 @@ More information about the encryption model and internal design: [OLM.md](doc/OL
 - **Works Over Any Channel** - SMS, email, messengers, government platforms, and other public channels
 - **Local Storage** - All data stays on your device
 - **Encrypted Storage** - Messages and sessions are stored locally in an encrypted with AES-256-GCM database
-- **Chat-Like Interface** - A clean UI built with **Slint**  [Work in progress]
+- **Chat-Like Interface** - A clean UI built with **Slint**
 - **Rust-Based** - Memory safe and blazingly fast
 
 # How It Works
@@ -58,11 +58,13 @@ cargo build --release
 ./target/release/OpenE2E
 ```
 
+Add `--features gui` to build command for Slint UI.
+
 ## Installation from pre-built binaries
 
 ### Installation
 
-- Go to [Releases](https://codeberg.org/bazelik-dev/OpenE2E/releases) and download latest binary
+- Go to [Releases](https://codeberg.org/bazelik-dev/OpenE2E/releases) and download latest binary (СLI or GUI)
 
 ### Verification
 
@@ -101,7 +103,8 @@ All encryption keys are derived from your user password and stored in memory dur
 - [x] Message DB storage
 - [x] Rus localisation
 - [x] CLI chat app, demo release
-- [ ] GUI chat app with Slint
+- [x] GUI chat app with Slint
+- [ ] Improved GUI
 - [ ] Obfuscation mode
 - [ ] Packaging and release builds
 
