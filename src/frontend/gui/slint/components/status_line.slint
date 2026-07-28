@@ -1,0 +1,15 @@
+// Copyright (C) 2026 bazelik-dev
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Status / error line: red on error, gray otherwise.
+export component StatusLine inherits Text {
+    in property <string> message;
+    in property <bool> is-error;
+    text: message;
+    color: is-error ? #e0554f : gray;
+    wrap: word-wrap;
+}

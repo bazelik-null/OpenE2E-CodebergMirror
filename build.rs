@@ -8,10 +8,9 @@
  */
 
 fn main() {
-    // Only compile the Slint UI when the `gui` feature is enabled, so that the
-    // default CLI build stays lean and does not require a windowing backend.
+    // Only compile the Slint UI when the `gui` feature is enabled.
     if std::env::var_os("CARGO_FEATURE_GUI").is_some() {
-        slint_build::compile("src/frontend/gui/app.slint")
-            .expect("failed to compile Slint UI (src/frontend/gui/app.slint)");
+        slint_build::compile("src/frontend/gui/slint/main.slint")
+            .expect("failed to compile Slint UI (src/frontend/gui/slint/main.slint)");
     }
 }

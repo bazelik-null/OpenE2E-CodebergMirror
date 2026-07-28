@@ -7,7 +7,7 @@
  * (at your option) any later version.
  */
 
-use crate::frontend::localization::Localization;
+use crate::frontend::fluent_manager::Localization;
 
 use super::Strings;
 
@@ -42,5 +42,8 @@ pub(super) fn build_strings(loc: &Localization) -> Strings {
         paste: loc.get("gui-paste").into(),
         outgoing_label: loc.get("gui-outgoing-label").into(),
         copy: loc.get("gui-copy").into(),
+        previous: loc.get("gui-previous").into(),
+        next: loc.get("gui-next").into(),
+        ready_to_create: loc.get("gui-ready-to-create").into(),
     }
 }

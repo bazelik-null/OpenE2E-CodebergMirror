@@ -13,14 +13,14 @@ use std::rc::Rc;
 use slint::{ModelRc, SharedString, VecModel};
 
 use crate::backend::managers::user_manager::UserManager;
-use crate::frontend::localization::Localization;
+use crate::frontend::fluent_manager::Localization;
 
 slint::include_modules!();
 
 mod auth;
 mod chat;
 mod clipboard;
-mod i18n;
+mod localization;
 mod session;
 
 // Type aliases for wrappers
@@ -54,7 +54,7 @@ fn initialize_ui(ui: &MainWindow, manager: &Manager, messages: &Messages) -> Res
     refresh_users(ui, manager);
 
     let loc = Rc::new(RefCell::new(Localization::new("en")?));
-    ui.set_t(i18n::build_strings(&loc.borrow()));
+    ui.set_t(localization::build_strings(&loc.borrow()));
     ui.set_language("en".into());
 
     Ok(())
@@ -134,7 +134,7 @@ fn wire_language(ui: &MainWindow, loc: &Localizer) {
         }
         drop(localizer);
 
-        ui.set_t(i18n::build_strings(&loc.borrow()));
+        ui.set_t(localization::build_strings(&loc.borrow()));
         ui.set_language(next_lang.into());
     });
 }

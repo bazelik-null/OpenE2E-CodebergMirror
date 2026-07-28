@@ -1,4 +1,4 @@
-# GUI - static labels
+# Static labels
 gui-login-as = Log in as
 gui-password = Password
 gui-log-in = Log in
@@ -10,13 +10,13 @@ gui-create-user = Create user
 gui-log-out = Log out
 gui-session = Session:
 gui-new-session = + New
-gui-wizard-title = New session - manual key exchange
+gui-wizard-title = New session
 gui-session-name = Session name
 gui-inbound = Inbound (peer sent the first message)
-gui-gen-keys = 1. Generate your keys
+gui-gen-keys = Generate your keys
 gui-my-keys-label = Your keys - send these to your peer:
-gui-peer-keys-label = 2. Peer's keys:
-gui-first-msg-label = 3. Peer's first (init) message:
+gui-peer-keys-label = Peer's keys:
+gui-first-msg-label = Peer's first (init) message:
 gui-create-session = Create session
 gui-close = Close
 gui-init-msg-label = Init message - send this to your peer:
@@ -27,8 +27,11 @@ gui-decrypt = ← Decrypt
 gui-paste = Paste
 gui-outgoing-label = Outgoing ciphertext
 gui-copy = Copy ciphertext
+gui-previous = ← Back
+gui-next = Next →
+gui-ready-to-create = Ready to create session
 
-# GUI - status messages
+# Status messages
 status-credentials-required = Username and password are required
 status-logged-in = Logged in
 status-user-created = User created

@@ -1,0 +1,228 @@
+// Copyright (C) 2026 bazelik-dev
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+import { Button, LineEdit, TextEdit, CheckBox } from "std-widgets.slint";
+import { StatusLine } from "status_line.slint";
+import { Strings } from "../types/types.slint";
+
+export component SessionWizard inherits VerticalLayout {
+    in-out property <string> new-session-name;
+    in-out property <string> peer-keys-input;
+    in-out property <string> first-msg-input;
+    in-out property <string> my-keys;
+    in-out property <string> init-message;
+    in-out property <string> status-text;
+    in-out property <bool> status-is-error;
+    in property <Strings> t;
+
+    callback session-gen-keys();
+    callback session-create(string, bool, string, string);
+    callback close-wizard();
+
+    private property <int> current-step: 0;
+    private property <bool> is-inbound;
+
+    spacing: 6px;
+
+    Text {
+        text: t.wizard-title;
+        font-size: 15px;
+    }
+
+    // Step 0: Session name
+    if current-step == 0: VerticalLayout {
+        spacing: 6px;
+
+        Text {
+            text: t.session-name;
+            color: gray;
+        }
+        LineEdit {
+            placeholder-text: t.session-name;
+            text <=> new-session-name;
+        }
+
+        Text {
+            text: t.inbound;
+            color: gray;
+        }
+        CheckBox {
+            text: t.inbound;
+            checked <=> is-inbound;
+        }
+    }
+
+    // Step 1: Generate Keys
+    if current-step == 1: VerticalLayout {
+        spacing: 6px;
+
+        Button {
+            text: t.gen-keys;
+            clicked => {
+                session-gen-keys();
+            }
+        }
+        Text {
+            text: t.my-keys-label;
+            color: gray;
+        }
+        TextEdit {
+            min-height: 54px;
+            wrap: word-wrap;
+            read-only: true;
+            text: my-keys;
+        }
+    }
+
+    // Step 2: Peer Keys
+    if current-step == 2: VerticalLayout {
+        spacing: 6px;
+
+        Text {
+            text: t.peer-keys-label;
+            color: gray;
+        }
+        TextEdit {
+            min-height: 54px;
+            wrap: word-wrap;
+            text <=> peer-keys-input;
+        }
+    }
+
+    // Step 3: Action (Inbound: Enter init message, Outbound: Ready state)
+    if current-step == 3: VerticalLayout {
+        spacing: 6px;
+
+        if is-inbound: VerticalLayout {
+            Text {
+                text: t.first-msg-label;
+                color: gray;
+            }
+            TextEdit {
+                text <=> first-msg-input;
+            }
+        }
+
+        if !is-inbound: Text { text: t.ready-to-create; }
+    }
+
+    // Step 4: Init Message (Outbound only)
+    if current-step == 4: VerticalLayout {
+        spacing: 6px;
+
+        Text {
+            text: t.init-msg-label;
+            color: gray;
+        }
+        TextEdit {
+            text: init-message;
+            read-only: true;
+            min-height: 54px;
+        }
+    }
+
+    // Button panel
+    HorizontalLayout {
+        spacing: 8px;
+
+        // Step 0: Close, Next
+        if current-step == 0: Button {
+            text: t.close;
+            clicked => {
+                close-wizard();
+            }
+        }
+        if current-step == 0: Button {
+            text: t.next;
+            enabled: new-session-name != "";
+            clicked => {
+                current-step += 1;
+            }
+        }
+
+        // Step 1: Previous, Close, Next
+        if current-step == 1: Button {
+            text: t.previous;
+            clicked => {
+                current-step -= 1;
+            }
+        }
+        if current-step == 1: Button {
+            text: t.close;
+            clicked => {
+                close-wizard();
+            }
+        }
+        if current-step == 1: Button {
+            text: t.next;
+            enabled: my-keys != "";
+            clicked => {
+                current-step += 1;
+            }
+        }
+
+        // Step 2: Previous, Close, Next
+        if current-step == 2: Button {
+            text: t.previous;
+            clicked => {
+                current-step -= 1;
+            }
+        }
+        if current-step == 2: Button {
+            text: t.close;
+            clicked => {
+                close-wizard();
+            }
+        }
+        if current-step == 2: Button {
+            text: t.next;
+            enabled: peer-keys-input != "";
+            clicked => {
+                current-step += 1;
+            }
+        }
+
+        // Step 3: Previous, Close, Create
+        if current-step == 3: Button {
+            text: t.previous;
+            clicked => {
+                current-step -= 1;
+            }
+        }
+        if current-step == 3: Button {
+            text: t.close;
+            clicked => {
+                close-wizard();
+            }
+        }
+        if current-step == 3: Button {
+            text: t.create-session;
+            enabled: is-inbound ? first-msg-input != "" : true;
+            clicked => {
+                session-create(new-session-name, is-inbound, peer-keys-input, first-msg-input);
+                current-step = 4;
+            }
+        }
+
+        // Step 4: Close only
+        if current-step == 4: Button {
+            text: t.close;
+            clicked => {
+                close-wizard();
+            }
+        }
+    }
+
+    StatusLine {
+        message: status-text;
+        is-error: status-is-error;
+    }
+
+    Rectangle {
+        vertical-stretch: 1;
+    }
+}
