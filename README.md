@@ -20,6 +20,22 @@ OpenE2E uses **Matrix OLM** via the `voldozemac` library, with **AES-256-GCM** f
 
 More information about the encryption model and internal design: [OLM.md](doc/OLM.md)
 
+# What's This For?
+
+**OpenE2E** lets you send messages through *any* channel (text, email, social media, and so on) so that only you and the recipient can read them. You encrypt messages on your device, copy the encrypted text, and paste it anywhere.
+
+## Why Confidentiality Matters
+
+**Data collection and analysis.** Companies and government agencies collect information about your location, contacts, browsing history, and online behavior. This data is used to build profiles, predict preferences, and target you with tailored content or messaging. In some cases, it's also used to identify and track "problematic" populations.
+
+**Automated content analysis.** With advances in machine learning, tools have emerged that can automatically analyze, categorize, and filter vast volumes of communications. Your messages can be scanned for specific content, flagged by algorithms, or reported to authorities. While such systems are still imperfect and produce false positives, they are becoming increasingly accurate and widespread.
+
+**What this means in practice.** Even if you're doing nothing illegal, your private thoughts, plans, and opinions can be misinterpreted by an algorithm, taken out of context, or used against you later, for example, when applying for a job, seeking a loan, or in legal proceedings.
+
+**Why end-to-end encryption matters:** When your messages are encrypted, neither companies nor government systems can scan or analyze them. Your communication remains visible only to you and the recipient - beyond the reach of mass monitoring and algorithmic analysis.
+
+OpenE2E ensures that your private messages are protected from interception, analysis, and censorship by third parties. Your data remains under your control.
+
 # Features
 
 - **Manual Secure Chat** - Exchange encrypted messages by copy-pasting them through any channel
@@ -104,6 +120,7 @@ All encryption keys are derived from your user password and stored in memory dur
 - [x] Rus localisation
 - [x] CLI chat app, demo release
 - [x] GUI chat app with Slint
+- [ ] File sending
 - [ ] Improved GUI
 - [ ] Obfuscation mode
 - [ ] Packaging and release builds
@@ -132,9 +149,35 @@ You are free to use, modify, and distribute this software under the terms of the
 
 Contributions are welcome! Please submit issues and pull requests on [Codeberg](https://codeberg.org/bazelik-dev/OpenE2E).
 
-# Disclaimer
+# Disclaimer and Terms of Use
 
-This software is provided as-is. While it implements industry-standard encryption, users are responsible for verifying key authenticity and following security best practices.
+OpenE2E is provided as a tool for protecting private communication in accordance 
+with free and open-source software principles.
+
+## Your Responsibility
+
+Users are fully responsible for:
+- Verifying that their use complies with the laws of their jurisdiction
+- All legal and ethical consequences of using this tool
+- Respecting the rights of others
+
+## Limitations of Our Liability
+
+The developer(s) of OpenE2E:
+- Do not bear legal responsibility for the use of this software
+- Do not control or monitor its application (the application runs locally on your device)
+- Do not provide legal or technical support for unlawful activities
+- Explicitly do not endorse use for criminal purposes
+
+## Lawful Use
+
+OpenE2E is designed to protect lawful private communication, including:
+- Business correspondence
+- Personal privacy
+- Journalism and source protection
+- Protection against mass surveillance
+
+Before using this tool, ensure that your use complies with the laws of your jurisdiction.
 
 
 Copyright (C) 2026 bazelik-dev

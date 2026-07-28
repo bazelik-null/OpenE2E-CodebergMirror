@@ -47,7 +47,7 @@ jobs:
           command: cargo build --release --target x86_64-unknown-linux-gnu
       - store_artifacts:
           path: target/x86_64-unknown-linux-gnu/release/OpenE2E
-          destination: OpenE2E-CLI_linux64.exe
+          destination: OpenE2E-CLI_linux64
 
   build-linux-64-gui:
     docker:
