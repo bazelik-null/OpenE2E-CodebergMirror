@@ -458,11 +458,13 @@ export component MainWindow inherits Window {
                                             padding-top: 6px;
                                             padding-bottom: 6px;
 
-                                            row := Text {
+                                            row := TextInput {
                                                 width: 100%;
                                                 text: line.text;
                                                 wrap: word-wrap;
                                                 color: #e0e0e0;
+                                                read-only: true;
+                                                single-line: false;
                                             }
                                         }
                                     }
