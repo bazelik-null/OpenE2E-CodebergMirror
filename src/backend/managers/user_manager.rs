@@ -48,18 +48,24 @@ pub struct UserManager {
 
 impl UserManager {
     pub fn new() -> Result<Self, String> {
-        let worker = BackgroundWorker::new(AUTOSAVE_INTERVAL, STORAGE_FILEPATH)?;
+        Self::with_storage_path(STORAGE_FILEPATH)
+    }
+
+    /// Like [`Self::new`] but opens the database at a custom path.
+    ///
+    /// Used by integration tests to point each test at its own temporary
+    /// database so they stay isolated and can run in parallel.
+    pub fn with_storage_path(db_path: &str) -> Result<Self, String> {
+        let worker = BackgroundWorker::new(AUTOSAVE_INTERVAL, db_path)?;
         let handle = worker.start();
 
         let users = Self::load_from_db(&handle)?;
 
-        let manager = Self {
+        Ok(Self {
             users,
             current_user: None,
             db_handle: handle,
-        };
-
-        Ok(manager)
+        })
     }
 
     // User operations
@@ -439,3 +445,7 @@ impl UserManager {
         self.db_handle.graceful_shutdown()
     }
 }
+
+#[cfg(test)]
+#[path = "user_manager_tests.rs"]
+mod tests;

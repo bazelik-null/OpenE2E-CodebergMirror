@@ -35,3 +35,7 @@ vodozemac = "0.10.0"
 
 [build-dependencies]
 slint-build = "1"
+
+[dev-dependencies]
+# Isolated temp directories for the fjall database in integration tests.
+tempfile = "3"

@@ -75,3 +75,39 @@ fn export_import_round_trip() {
 
     assert_eq!(restored.get_session_names(), vec!["s"]);
 }
+
+#[test]
+fn two_party_conversation_through_managers() {
+    // End-to-end exchange driven entirely through the SessionManager API
+    // (establish + select + encrypt/decrypt on the active session), the way
+    // two real peers talk to each other.
+    let mut bazya_acc = Account::new();
+    let mut dev_acc = Account::new();
+    let bazya_bundle = SessionInstance::generate_keys(&mut bazya_acc).unwrap();
+    let dev_bundle = SessionInstance::generate_keys(&mut dev_acc).unwrap();
+
+    let mut bazya = SessionManager::new();
+    let mut dev = SessionManager::new();
+
+    // bazya opens the outbound side and sends the empty pre-key message;
+    // dev opens the inbound side from it.
+    bazya
+        .establish_out_session(&mut bazya_acc, "chat", &dev_bundle)
+        .unwrap();
+    bazya.select_session("chat").unwrap();
+    let init = bazya.encrypt("").unwrap();
+
+    dev.establish_in_session(&mut dev_acc, "chat", &bazya_bundle, &init)
+        .unwrap();
+    dev.select_session("chat").unwrap();
+
+    // Several messages in both directions.
+    let m1 = bazya.encrypt("hello").unwrap();
+    assert_eq!(dev.decrypt(&m1).unwrap(), "hello");
+
+    let m2 = dev.encrypt("hi back").unwrap();
+    assert_eq!(bazya.decrypt(&m2).unwrap(), "hi back");
+
+    let m3 = bazya.encrypt("how are you").unwrap();
+    assert_eq!(dev.decrypt(&m3).unwrap(), "how are you");
+}

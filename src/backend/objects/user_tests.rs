@@ -13,9 +13,6 @@
 //! (Argon2). These check that a correct password round-trips, a wrong password
 //! is rejected, and that key derivation is deterministic (the salt comes from
 //! the username).
-//!
-//! Note: these tests run Argon2 and are therefore noticeably slower than the
-//! other suites.
 
 use super::*;
 
