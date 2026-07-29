@@ -147,3 +147,7 @@ pub fn derive_key_from_password(password: &str, salt: SaltString) -> Result<[u8;
 
     Ok(key)
 }
+
+#[cfg(test)]
+#[path = "user_tests.rs"]
+mod tests;

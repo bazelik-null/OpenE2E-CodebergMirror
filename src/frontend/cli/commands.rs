@@ -138,3 +138,7 @@ fn scan_user_commands(subcommand: &str, arguments: Vec<&str>) -> Option<Command>
         _ => None,
     }
 }
+
+#[cfg(test)]
+#[path = "commands_tests.rs"]
+mod tests;

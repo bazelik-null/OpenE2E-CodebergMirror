@@ -170,3 +170,7 @@ impl SessionManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "session_manager_tests.rs"]
+mod tests;

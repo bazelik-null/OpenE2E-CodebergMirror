@@ -184,3 +184,7 @@ impl SessionInstance {
         Ok(SessionInstance { name, session })
     }
 }
+
+#[cfg(test)]
+#[path = "session_tests.rs"]
+mod tests;
