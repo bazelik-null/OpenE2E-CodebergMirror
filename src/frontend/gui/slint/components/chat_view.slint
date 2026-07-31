@@ -1,0 +1,269 @@
+// Copyright (C) 2026 bazelik-dev
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+import { Button, LineEdit, TextEdit, ComboBox, ListView } from "std-widgets.slint";
+import { StatusLine } from "status_line.slint";
+import { SessionWizard } from "session_wizard.slint";
+import { ChatLine, Strings } from "../types/types.slint";
+
+export component ChatView inherits VerticalLayout {
+    in-out property <string> current-user;
+    in-out property <string> current-session;
+    in-out property <[string]> sessions;
+    in-out property <[ChatLine]> messages;
+    in-out property <int> message-count;
+    in-out property <string> message-input;
+    in-out property <string> output-text;
+    in-out property <string> status-text;
+    in-out property <bool> status-is-error;
+    in-out property <bool> creating-session: false;
+    in-out property <string> new-session-name;
+    in-out property <string> peer-keys-input;
+    in-out property <string> first-msg-input;
+    in-out property <string> my-keys;
+    in-out property <string> init-message;
+    in property <Strings> t;
+    in-out property <string> language;
+
+    callback logout();
+    callback select-session(string);
+    callback do-encrypt(string);
+    callback do-decrypt(string);
+    callback submit-input(string);
+    callback delete-session(string);
+    callback copy-output();
+    callback paste-input();
+    callback session-gen-keys();
+    callback session-create(string, bool, string, string);
+    callback toggle-language();
+
+    spacing: 8px;
+
+    // Header
+    HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: "👤 " + current-user;
+            vertical-alignment: center;
+        }
+        Rectangle { }
+        Button {
+            text: language == "en" ? "RU" : "EN";
+            clicked => {
+                toggle-language();
+            }
+        }
+        Button {
+            text: t.log-out;
+            clicked => {
+                logout();
+            }
+        }
+    }
+
+    // Session managment
+    HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: t.session;
+            vertical-alignment: center;
+        }
+        ComboBox {
+            model: sessions;
+            current-value: current-session;
+            selected(value) => {
+                select-session(value);
+            }
+        }
+        Button {
+            text: t.new-session;
+            clicked => {
+                new-session-name = "";
+                peer-keys-input = "";
+                first-msg-input = "";
+                my-keys = "";
+                init-message = "";
+                creating-session = true;
+            }
+        }
+        Button {
+            text: "Delete";
+            enabled: current-session != "";
+            clicked => {
+                delete-session(current-session);
+            }
+        }
+    }
+
+    // Session-creation wizard
+    if creating-session: SessionWizard {
+        new-session-name <=> new-session-name;
+        peer-keys-input <=> peer-keys-input;
+        first-msg-input <=> first-msg-input;
+        my-keys <=> my-keys;
+        init-message <=> init-message;
+        status-text <=> status-text;
+        status-is-error <=> status-is-error;
+        t: t;
+        session-gen-keys => {
+            session-gen-keys();
+        }
+        session-create(name, inbound, peer-keys, first-msg) => {
+            session-create(name, inbound, peer-keys, first-msg);
+        }
+        close-wizard => {
+            creating-session = false;
+        }
+    }
+
+    // Normal chat
+    if !creating-session: VerticalLayout {
+        spacing: 12px;
+        padding: 12px;
+
+        // Chat history section
+        VerticalLayout {
+            spacing: 8px;
+            Text {
+                text: t.history;
+                color: #aaa;
+                font-size: 12px;
+                font-weight: 3;
+            }
+            list := Rectangle {
+                background: #1e1e1e;
+                border-radius: 6px;
+                clip: true;
+
+                // Message list
+                ListView {
+                    min-height: 200px;
+                    property <int> msg-count: message-count;
+                    changed msg-count => {
+                        self.viewport-y = min(0px, self.height - self.viewport-height);
+                    }
+
+                    for line in messages: Rectangle {
+                        height: row.preferred-height + 40px;
+                        background: transparent;
+
+                        VerticalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            padding-top: 12px;
+                            padding-bottom: 12px;
+                            spacing: 4px;
+
+                            // Sender and time
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: line.sender;
+                                    font-weight: 3;
+                                    color: (line.sender == current-user) ? #64b5f6 : #e0e0e0;
+                                    font-size: 11px;
+                                }
+                                Rectangle {}
+                                Text {
+                                    text: line.time;
+                                    color: #666;
+                                    font-size: 10px;
+                                }
+                            }
+
+                            // Message bubble
+                            msg-bubble := Rectangle {
+                                background: (line.sender == current-user) ? #095c9f : #2a2a2a;
+                                border-radius: 6px;
+
+                                VerticalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
+                                    padding-top: 6px;
+                                    padding-bottom: 6px;
+
+                                    row := TextInput {
+                                        width: 100%;
+                                        text: line.text;
+                                        wrap: word-wrap;
+                                        color: #e0e0e0;
+                                        read-only: true;
+                                        single-line: false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Input section
+        VerticalLayout {
+            spacing: 8px;
+            LineEdit {
+                placeholder-text: t.message-placeholder;
+                text <=> message-input;
+                accepted => {
+                    submit-input(self.text);
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Button {
+                    text: t.encrypt;
+                    enabled: message-input != "";
+                    clicked => {
+                        do-encrypt(message-input);
+                    }
+                }
+                Button {
+                    text: t.decrypt;
+                    enabled: message-input != "";
+                    clicked => {
+                        do-decrypt(message-input);
+                    }
+                }
+                Button {
+                    text: t.paste;
+                    clicked => {
+                        paste-input();
+                    }
+                }
+            }
+        }
+
+        // Output section
+        VerticalLayout {
+            spacing: 8px;
+            Text {
+                text: t.outgoing-label;
+                color: #aaa;
+                font-size: 12px;
+                font-weight: 3;
+            }
+            TextEdit {
+                min-height: 80px;
+                wrap: word-wrap;
+                read-only: true;
+                text: output-text;
+            }
+            Button {
+                text: t.copy;
+                enabled: output-text != "";
+                clicked => {
+                    copy-output();
+                }
+            }
+        }
+
+        StatusLine {
+            message: status-text;
+            is-error: status-is-error;
+        }
+    }
+}

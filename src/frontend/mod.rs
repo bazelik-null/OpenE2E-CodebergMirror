@@ -13,5 +13,5 @@ pub mod cli;
 #[cfg(feature = "gui")]
 pub mod gui;
 
-mod localization;
+mod fluent_manager;
 pub mod logger;

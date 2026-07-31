@@ -1,4 +1,4 @@
-# GUI - статические подписи
+# Static labels
 gui-login-as = Войти как
 gui-password = Пароль
 gui-log-in = Войти
@@ -10,13 +10,13 @@ gui-create-user = Создать
 gui-log-out = Выйти
 gui-session = Сессия:
 gui-new-session = + Создать
-gui-wizard-title = Создание сессии - обмен ключами вручную
+gui-wizard-title = Создание сессии
 gui-session-name = Название сессии
 gui-inbound = Входящий (собеседник прислал первое сообщение)
-gui-gen-keys = 1. Сгенерировать ваши ключи
+gui-gen-keys = Сгенерировать ваши ключи
 gui-my-keys-label = Ваши ключи - отправьте их собеседнику:
-gui-peer-keys-label = 2. Ключи собеседника:
-gui-first-msg-label = 3. Первое (инициализирующее) сообщение собеседника:
+gui-peer-keys-label = Ключи собеседника:
+gui-first-msg-label = Первое (инициализирующее) сообщение собеседника:
 gui-create-session = Создать сессию
 gui-close = Закрыть
 gui-init-msg-label = Инициализирующее сообщение - отправьте его собеседнику:
@@ -27,8 +27,11 @@ gui-decrypt = ← Расшифровать
 gui-paste = Вставить
 gui-outgoing-label = Исходящий шифр
 gui-copy = Копировать шифр
+gui-previous = ← Назад
+gui-next = Вперёд →
+gui-ready-to-create = Готово к созданию сесиии
 
-# GUI - статус-сообщения
+# Status messages
 status-credentials-required = Введите имя пользователя и пароль
 status-logged-in = Вход выполнен
 status-user-created = Пользователь создан

@@ -1,0 +1,153 @@
+// Copyright (C) 2026 bazelik-dev
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+import { Button, LineEdit } from "std-widgets.slint";
+import { StatusLine } from "status_line.slint";
+import { Strings } from "../types/types.slint";
+
+export component LoginView inherits VerticalLayout {
+    in-out property <[string]> users;
+    in-out property <string> login-user;
+    in-out property <string> confirm-delete-user;
+    in-out property <string> status-text;
+    in-out property <bool> status-is-error;
+    in property <Strings> t;
+    in-out property <string> language;
+
+    callback login(string, string);
+    callback create-user(string, string);
+    callback delete-user(string);
+    callback toggle-language();
+
+    spacing: 4px;
+
+    // Header
+    HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: language == "en" ? "RU" : "EN";
+            width: 60px;
+            clicked => {
+                toggle-language();
+            }
+        }
+    }
+    Text {
+        text: "OpenE2E";
+        font-size: 22px;
+        horizontal-alignment: center;
+    }
+
+    // Scrollable content area
+    VerticalLayout {
+        spacing: 4px;
+        alignment: center;
+        vertical-stretch: 0;
+
+        // Password prompt for the selected user
+        if login-user != "": VerticalLayout {
+            spacing: 8px;
+            alignment: center;
+            max-width: 400px;
+
+            Text {
+                text: t.login-as + " " + login-user;
+                horizontal-alignment: center;
+            }
+            loginpass := LineEdit {
+                placeholder-text: t.password;
+                input-type: InputType.password;
+                accepted => {
+                    login(login-user, self.text);
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Button {
+                    text: t.log-in;
+                    enabled: loginpass.text != "";
+                    clicked => {
+                        login(login-user, loginpass.text);
+                    }
+                }
+                Button {
+                    text: t.back;
+                    clicked => {
+                        login-user = "";
+                    }
+                }
+            }
+        }
+
+        // User list + create form
+        if login-user == "": VerticalLayout {
+            spacing: 4px;
+            alignment: center;
+            max-width: 400px;
+
+            Text {
+                text: t.select-user;
+                color: gray;
+            }
+            for user in users: HorizontalLayout {
+                spacing: 8px;
+                Button {
+                    text: user;
+                    clicked => {
+                        confirm-delete-user = "";
+                        status-text = "";
+                        login-user = user;
+                    }
+                }
+                Button {
+                    width: 64px;
+                    text: confirm-delete-user == user ? "Confirm" : "Delete";
+                    clicked => {
+                        if (confirm-delete-user == user) {
+                            delete-user(user);
+                            confirm-delete-user = "";
+                        } else {
+                            confirm-delete-user = user;
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 8px;
+            }
+
+            Text {
+                text: t.create-new-user;
+                color: gray;
+            }
+            newname := LineEdit {
+                placeholder-text: t.username;
+            }
+            newpass := LineEdit {
+                placeholder-text: t.password;
+                input-type: InputType.password;
+            }
+            Button {
+                text: t.create-user;
+                enabled: newname.text != "" && newpass.text != "";
+                clicked => {
+                    create-user(newname.text, newpass.text);
+                }
+            }
+        }
+    }
+
+    // Status right under the content, then the filler pushes it up.
+    StatusLine {
+        message: status-text;
+        is-error: status-is-error;
+    }
+    Rectangle {
+        vertical-stretch: 1;
+    }
+}

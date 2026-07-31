@@ -1,0 +1,147 @@
+// Copyright (C) 2026 bazelik-dev
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+import { Button, LineEdit, TextEdit, ComboBox, ListView, CheckBox, Palette } from "std-widgets.slint";
+import { StatusLine } from "components/status_line.slint";
+import { LoginView } from "components/login_view.slint";
+import { ChatView } from "components/chat_view.slint";
+import { ChatLine, Strings } from "types/types.slint";
+
+export component MainWindow inherits Window {
+    title: "OpenE2E";
+    icon: @image-url("../../../../doc/img/logo.png");
+    background: Palette.background;
+    preferred-width: 460px;
+    preferred-height: 760px;
+    min-width: 360px;
+    min-height: 520px;
+
+    // Currnt state
+    in-out property <bool> logged-in: false;
+    in-out property <[string]> users;
+    in-out property <string> login-user;
+    in-out property <string> confirm-delete-user;
+    in-out property <string> current-user;
+    in-out property <string> current-session;
+    in-out property <[string]> sessions;
+    in-out property <[ChatLine]> messages;
+    in-out property <int> message-count;
+    in-out property <string> message-input;
+    in-out property <string> output-text;
+    in-out property <string> status-text;
+    in-out property <bool> status-is-error;
+
+    // Localization
+    in property <Strings> t;
+    in-out property <string> language;
+
+    // Session-creation wizard state
+    in-out property <bool> creating-session: false;
+    in-out property <string> new-session-name;
+    in-out property <string> peer-keys-input;
+    in-out property <string> first-msg-input;
+    in-out property <string> my-keys;
+    in-out property <string> init-message;
+
+    // Callbacks into backend
+    callback login(string, string);
+    callback create-user(string, string);
+    callback delete-user(string);
+    callback logout();
+    callback select-session(string);
+    callback do-encrypt(string);
+    callback do-decrypt(string);
+    callback submit-input(string);
+    callback delete-session(string);
+    callback copy-output();
+    callback paste-input();
+    callback session-gen-keys();
+    callback session-create(string, bool, string, string);
+    callback toggle-language();
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+
+        // Login view
+        if !logged-in: LoginView {
+            users <=> users;
+            login-user <=> login-user;
+            confirm-delete-user <=> confirm-delete-user;
+            status-text <=> status-text;
+            status-is-error <=> status-is-error;
+            t: t;
+            language <=> language;
+            login(user, pass) => {
+                login(user, pass);
+            }
+            create-user(name, pass) => {
+                create-user(name, pass);
+            }
+            delete-user(user) => {
+                delete-user(user);
+            }
+            toggle-language => {
+                toggle-language();
+            }
+        }
+
+        // Chat view
+        if logged-in: ChatView {
+            current-user <=> current-user;
+            current-session <=> current-session;
+            sessions <=> sessions;
+            messages <=> messages;
+            message-count <=> message-count;
+            message-input <=> message-input;
+            output-text <=> output-text;
+            status-text <=> status-text;
+            status-is-error <=> status-is-error;
+            creating-session <=> creating-session;
+            new-session-name <=> new-session-name;
+            peer-keys-input <=> peer-keys-input;
+            first-msg-input <=> first-msg-input;
+            my-keys <=> my-keys;
+            init-message <=> init-message;
+            t: t;
+            language <=> language;
+            logout => {
+                logout();
+            }
+            select-session(value) => {
+                select-session(value);
+            }
+            do-encrypt(text) => {
+                do-encrypt(text);
+            }
+            do-decrypt(text) => {
+                do-decrypt(text);
+            }
+            submit-input(text) => {
+                submit-input(text);
+            }
+            delete-session(session) => {
+                delete-session(session);
+            }
+            copy-output => {
+                copy-output();
+            }
+            paste-input => {
+                paste-input();
+            }
+            session-gen-keys => {
+                session-gen-keys();
+            }
+            session-create(name, inbound, peer-keys, first-msg) => {
+                session-create(name, inbound, peer-keys, first-msg);
+            }
+            toggle-language => {
+                toggle-language();
+            }
+        }
+    }
+}

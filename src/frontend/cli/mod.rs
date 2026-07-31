@@ -17,11 +17,11 @@ use crate::backend::managers::user_manager::UserManager;
 use crate::backend::objects::session::SessionInstance;
 use crate::backend::objects::user::User;
 use crate::frontend::cli::commands::{Command, scan_commands};
-use crate::frontend::localization::{Localization, fluent_args};
+use crate::frontend::fluent_manager::{Localization, fluent_args};
 
-const HEADER_WIDTH: usize = 34;
+const HEADER_WIDTH: usize = 36;
 const SECTION_WIDTH: usize = 40;
-const VERSION: &str = "v1.0";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub struct Application {
     user_manager: UserManager,
@@ -57,7 +57,7 @@ impl Application {
         println!();
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
         println!(
-            "{0} {1} {2} {0}",
+            "{0} {1} v{2} {0}",
             "#".repeat(3).cyan(),
             self.localization.get("welcome-header").cyan(),
             VERSION.cyan()
