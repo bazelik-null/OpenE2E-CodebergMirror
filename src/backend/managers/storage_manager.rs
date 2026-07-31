@@ -463,3 +463,7 @@ impl WorkerHandle {
         &self.worker
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/storage_manager.rs"]
+mod tests;

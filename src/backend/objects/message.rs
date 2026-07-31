@@ -85,3 +85,7 @@ impl Message {
         Ok(msg)
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/message.rs"]
+mod tests;
