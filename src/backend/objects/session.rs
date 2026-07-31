@@ -186,5 +186,5 @@ impl SessionInstance {
 }
 
 #[cfg(test)]
-#[path = "session_tests.rs"]
+#[path = "../../tests/session.rs"]
 mod tests;

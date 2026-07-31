@@ -140,5 +140,5 @@ fn scan_user_commands(subcommand: &str, arguments: Vec<&str>) -> Option<Command>
 }
 
 #[cfg(test)]
-#[path = "commands_tests.rs"]
+#[path = "../../tests/commands.rs"]
 mod tests;

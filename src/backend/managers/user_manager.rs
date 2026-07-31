@@ -447,5 +447,5 @@ impl UserManager {
 }
 
 #[cfg(test)]
-#[path = "user_manager_tests.rs"]
+#[path = "../../tests/user_manager.rs"]
 mod tests;

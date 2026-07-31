@@ -465,5 +465,5 @@ impl WorkerHandle {
 }
 
 #[cfg(test)]
-#[path = "storage_manager_tests.rs"]
+#[path = "../../tests/storage_manager.rs"]
 mod tests;

@@ -175,5 +175,5 @@ pub fn fluent_args(pairs: &[(&str, &str)]) -> FluentArgs<'static> {
 }
 
 #[cfg(test)]
-#[path = "localization_tests.rs"]
+#[path = "../tests/fluent_manager.rs"]
 mod tests;

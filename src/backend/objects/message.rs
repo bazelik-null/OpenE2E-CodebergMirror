@@ -87,5 +87,5 @@ impl Message {
 }
 
 #[cfg(test)]
-#[path = "message_tests.rs"]
+#[path = "../../tests/message.rs"]
 mod tests;
