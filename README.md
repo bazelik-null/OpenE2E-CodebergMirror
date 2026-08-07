@@ -62,7 +62,7 @@ OpenE2E ensures that your private messages are protected from interception, anal
 
 ## Installation from source
 
-### Build from Source
+### Build with Cargo (parallel)
 
 **Requirements:**
 - Rust
@@ -70,11 +70,31 @@ OpenE2E ensures that your private messages are protected from interception, anal
 ```bash
 git clone https://codeberg.org/bazelik-dev/OpenE2E.git
 cd OpenE2E
-cargo build --release
-./target/release/OpenE2E
+./build.sh
 ```
 
-Add `--features gui` to build command for Slint UI.
+This script builds both CLI and GUI binaries in parallel across all available cores. Outputs are available in:
+- CLI: `./OpenE2E-CLI_{linux,windows}/bin/OpenE2E`
+- GUI: `./OpenE2E-GUI_{linux,windows}/bin/OpenE2E`
+
+Platform is automatically detected at build time.
+
+### Build with Nix
+
+**Requirements:**
+- Nix with flakes enabled
+
+```bash
+git clone https://codeberg.org/bazelik-dev/OpenE2E.git
+cd OpenE2E
+./build-nix.sh
+```
+
+This script builds both CLI and GUI binaries in parallel across all available cores using Nix. Outputs are available in:
+- CLI: `./OpenE2E-CLI_NixOS/bin/OpenE2E`
+- GUI: `./OpenE2E-GUI_NixOS/bin/OpenE2E`
+
+Both binaries include all necessary runtime dependencies bundled in their respective `lib/` directories.
 
 ## Installation from pre-built binaries
 

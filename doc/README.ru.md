@@ -62,20 +62,39 @@ OpenE2E гарантирует, что ваши приватные сообще�
 
 ## Установка из исходного кода
 
-### Сборка из исходника
+### Сборка с помощью Cargo (параллельно)
 
 **Требования:**
-- LLVM Clang
 - Rust
 
 ```bash
 git clone https://codeberg.org/bazelik-dev/OpenE2E.git
 cd OpenE2E
-cargo build --release
-./target/release/OpenE2E
+./build.sh
 ```
 
-Добавьте `--features gui` в билд команду для Slint UI.
+Этот скрипт собирает бинарные файлы CLI и GUI параллельно на всех доступных ядрах. Выходные файлы находятся в:
+- CLI: `./OpenE2E-CLI_{linux,windows}/bin/OpenE2E`
+- GUI: `./OpenE2E-GUI_{linux,windows}/bin/OpenE2E`
+
+Платформа автоматически определяется во время сборки.
+
+### Сборка с помощью Nix
+
+**Требования:**
+- Nix с включенными flakes
+
+```bash
+git clone https://codeberg.org/bazelik-dev/OpenE2E.git
+cd OpenE2E
+./build-nix.sh
+```
+
+Этот скрипт собирает бинарные файлы CLI и GUI параллельно на всех доступных ядрах, используя Nix. Выходные файлы находятся в:
+- CLI: `./OpenE2E-CLI_NixOS/bin/OpenE2E`
+- GUI: `./OpenE2E-GUI_NixOS/bin/OpenE2E`
+
+Оба бинарных файла включают все необходимые зависимости времени выполнения, упакованные в их соответствующих директориях `lib/`.
 
 ## Установка из предскомпилированных бинарников
 
