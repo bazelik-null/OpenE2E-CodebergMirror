@@ -12,12 +12,19 @@ use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 
 pub struct OpenE2ELogger;
 
-#[cfg(debug_assertions)]
+// If debug and not gui - Debug
+#[cfg(all(debug_assertions, not(feature = "gui")))]
 const DEBUG_LEVEL: Level = Level::Debug;
 
+// If not debug and not gui - Error
 #[cfg(all(not(debug_assertions), not(feature = "gui")))]
 const DEBUG_LEVEL: Level = Level::Error;
 
+// If debug and gui - Info
+#[cfg(all(debug_assertions, feature = "gui"))]
+const DEBUG_LEVEL: Level = Level::Info;
+
+// If not debug and gui - Info
 #[cfg(all(not(debug_assertions), feature = "gui"))]
 const DEBUG_LEVEL: Level = Level::Info;
 
