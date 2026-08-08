@@ -23,18 +23,31 @@ use crate::error_mapper::MapErrorToString;
 #[derive(Clone)]
 pub struct SerializedUser {
     pub name: String,
+    pub salt: String,
     pub account_data: String,
     pub sessions: Vec<(String, String)>,
 }
 
 impl SerializedUser {
-    fn new(name: String, account_data: String, sessions: Vec<(String, String)>) -> Self {
+    fn new(
+        name: String,
+        salt: String,
+        account_data: String,
+        sessions: Vec<(String, String)>,
+    ) -> Self {
         Self {
             name,
+            salt,
             account_data,
             sessions,
         }
     }
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct UserDataBlob {
+    salt: String,
+    account_data: String,
 }
 
 // UserManager
@@ -75,10 +88,10 @@ impl UserManager {
         }
 
         let user = User::new(name, password)?;
-        let (username, account_data, sessions) = user.serialize()?;
+        let (username, salt, account_data, sessions) = user.serialize()?;
 
         self.users
-            .push(SerializedUser::new(username, account_data, sessions));
+            .push(SerializedUser::new(username, salt, account_data, sessions));
 
         Ok(())
     }
@@ -280,6 +293,7 @@ impl UserManager {
         // Deserialize with password verification
         let user = User::deserialize(
             serialized_user.name.clone(),
+            serialized_user.salt.clone(),
             serialized_user.account_data.clone(),
             serialized_user.sessions.clone(),
             password,
@@ -354,9 +368,10 @@ impl UserManager {
     /// Syncs the current user's data back to the users list
     fn sync_current_user_to_storage(&mut self) -> Result<(), String> {
         if let Some(ref current_user) = self.current_user {
-            let (username, account_data, sessions) = current_user.serialize()?;
+            let (username, salt, account_data, sessions) = current_user.serialize()?;
 
             if let Some(stored_user) = self.users.iter_mut().find(|u| u.name == username) {
+                stored_user.salt = salt;
                 stored_user.account_data = account_data;
                 stored_user.sessions = sessions;
             }
@@ -371,8 +386,17 @@ impl UserManager {
 
         // Save all users to database
         for user in &self.users {
-            // Save user
-            db.save_user(&user.name, user.account_data.as_bytes())?;
+            // Combine salt and account data into a single blob for storage
+            let user_blob = UserDataBlob {
+                salt: user.salt.clone(),
+                account_data: user.account_data.clone(),
+            };
+            let data_to_save = serde_json::to_vec(&user_blob)
+                .map_err(|e| format!("Failed to serialize user data for saving: {}", e))?;
+
+            // Save combined blob
+            db.save_user(&user.name, &data_to_save)?;
+
             // Save sessions
             for session in &user.sessions {
                 db.save_session(&session.0, &user.name, session.1.as_bytes())?;
@@ -388,18 +412,26 @@ impl UserManager {
 
         let mut result = Vec::new();
 
+        // Format: (username, combined_salt_and_account_data_blob)
         let users = db.get_all_users()?;
 
-        for user in &users {
+        for (user_name, user_blob_bytes) in &users {
+            // Deserialize the blob to extract salt and account data
+            let user_blob: UserDataBlob = serde_json::from_slice(user_blob_bytes)
+                .map_err(|e| format!("Failed to deserialize user blob for loading: {}", e))?;
+
+            // Retrieve sessions
             let mut sessions = Vec::new();
-            for (key, bytes) in db.get_sessions_by_user(&user.0)? {
+            for (key, bytes) in db.get_sessions_by_user(user_name)? {
                 let value = String::from_utf8(bytes).map_err_to_string()?;
                 sessions.push((key, value));
             }
 
+            // Create SerializedUser using the extracted salt
             let user_result = SerializedUser {
-                name: user.0.clone(),
-                account_data: String::from_utf8(user.1.clone()).map_err_to_string()?,
+                name: user_name.clone(),
+                salt: user_blob.salt,
+                account_data: user_blob.account_data,
                 sessions,
             };
 
@@ -417,6 +449,7 @@ impl UserManager {
             .map(|user| {
                 (
                     user.name.clone(),
+                    user.salt.clone(),
                     user.account_data.clone(),
                     user.sessions.clone(),
                 )
@@ -429,9 +462,9 @@ impl UserManager {
         self.users.clear();
         self.current_user = None;
 
-        for (username, account_data, sessions) in users_data {
+        for (username, salt, account_data, sessions) in users_data {
             self.users
-                .push(SerializedUser::new(username, account_data, sessions));
+                .push(SerializedUser::new(username, salt, account_data, sessions));
         }
 
         Ok(())

@@ -7,28 +7,25 @@
  * (at your option) any later version.
  */
 
-use argon2::password_hash::SaltString;
+use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD_NO_PAD;
-use sha2::{Digest, Sha256};
 use vodozemac::olm::{Account, AccountPickle};
 
 use crate::backend::managers::session_manager::SessionManager;
 use crate::error_mapper::MapErrorToString;
 
-const SALT_HASH_LENGTH: usize = 16;
 const KEY_LENGTH: usize = 32;
 
-pub type SerializedUserTurple = (String, String, Vec<(String, String)>);
+pub type SerializedUserTurple = (String, String, String, Vec<(String, String)>);
 
 // User
 
 pub struct User {
     pub name: String,
+    pub salt: String,
     pub account: Account,
     pub session_manager: SessionManager,
-    pub encryption_key: [u8; 32],
+    pub encryption_key: [u8; KEY_LENGTH],
 }
 
 impl User {
@@ -36,10 +33,13 @@ impl User {
         let mut account = Account::new();
         account.generate_fallback_key();
 
-        let encryption_key = Self::derive_encryption_key(name, password)?;
+        let salt = generate_random_salt();
+        let salt_b64 = salt.to_string();
+        let encryption_key = Self::derive_encryption_key(salt, password)?;
 
         Ok(Self {
             name: name.to_string(),
+            salt: salt_b64,
             session_manager: SessionManager::default(),
             account,
             encryption_key,
@@ -49,23 +49,30 @@ impl User {
     // Persistence
 
     /// Serializes the user to encrypted format
-    /// Format: (username, encrypted_account, sessions_vec)
+    /// Format: (username, salt, encrypted_account, sessions_vec)
     pub fn serialize(&self) -> Result<SerializedUserTurple, String> {
         let account_pickle = self.encrypt_account()?;
         let sessions_data = self.serialize_sessions()?;
 
-        Ok((self.name.clone(), account_pickle, sessions_data))
+        Ok((
+            self.name.clone(),
+            self.salt.clone(),
+            account_pickle,
+            sessions_data,
+        ))
     }
 
     /// Deserializes a user from encrypted format
-    /// Format: (username, encrypted_account, sessions_vec)
+    /// Format: (username, salt, encrypted_account, sessions_vec)
     pub fn deserialize(
         username: String,
+        salt_string: String,
         encrypted_account: String,
         sessions_data: Vec<(String, String)>,
         password: &str,
     ) -> Result<Self, String> {
-        let encryption_key = Self::derive_encryption_key(&username, password)?;
+        let salt = SaltString::from_b64(&salt_string).map_err_to_string()?;
+        let encryption_key = Self::derive_encryption_key(salt, password)?;
 
         let account = Self::decrypt_account(&encrypted_account, &encryption_key)?;
         let mut session_manager = SessionManager::default();
@@ -73,6 +80,7 @@ impl User {
 
         Ok(Self {
             name: username,
+            salt: salt_string,
             session_manager,
             account,
             encryption_key,
@@ -99,9 +107,8 @@ impl User {
     // Cryptography
 
     /// Derives an encryption key from the user's name and password
-    /// Uses the name to generate a deterministic salt via SHA-256 hashing, then applies Argon2 to derive a 32-byte encryption key
-    fn derive_encryption_key(name: &str, password: &str) -> Result<[u8; 32], String> {
-        let salt = generate_salt_from_name(name)?;
+    /// Uses provided random salt, then applies Argon2 to derive a 32-byte encryption key
+    fn derive_encryption_key(salt: SaltString, password: &str) -> Result<[u8; KEY_LENGTH], String> {
         derive_key_from_password(password, salt)
     }
 
@@ -120,14 +127,9 @@ impl User {
 
 // Utilities
 
-/// Generates a deterministic salt from a username using SHA-256
-fn generate_salt_from_name(name: &str) -> Result<SaltString, String> {
-    let hash = Sha256::digest(name.as_bytes());
-    let salt_bytes = &hash[..SALT_HASH_LENGTH];
-    let salt_b64 = BASE64_STANDARD_NO_PAD.encode(salt_bytes);
-
-    SaltString::from_b64(&salt_b64)
-        .map_err(|e| format!("Failed to create salt from username: {}", e))
+/// Generates a random salt.
+fn generate_random_salt() -> SaltString {
+    SaltString::generate(&mut OsRng)
 }
 
 /// Derives a 32-byte encryption key from a password using Argon2.

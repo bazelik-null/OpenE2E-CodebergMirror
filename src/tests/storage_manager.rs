@@ -7,16 +7,13 @@
  * (at your option) any later version.
  */
 
-//! Integration tests for [`DatabaseManager`] — the fjall-backed key/value store.
-//!
-//! Each test opens its own temporary database directory, so they are isolated
-//! and safe to run in parallel. These verify the basic CRUD paths and the
-//! user→sessions / session→messages indexes.
-
+/// Integration tests for DatabaseManager.
+///
+/// Each test opens its own temporary database directory, so they are isolated and safe to run in parallel.
+/// These verify the basic CRUD paths and the user -> sessions / session -> messages indexes.
 use super::*;
 
-/// Opens a `DatabaseManager` on a fresh temporary directory. The `TempDir` must
-/// be kept alive for the test's duration (dropping it deletes the directory).
+/// Opens a DatabaseManager on a fresh temporary directory. The TempDir must be kept alive for the test's duration (dropping it deletes the directory).
 fn temp_db() -> (tempfile::TempDir, DatabaseManager) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("db").to_str().unwrap().to_string();
@@ -28,19 +25,19 @@ fn temp_db() -> (tempfile::TempDir, DatabaseManager) {
 fn user_save_get_delete() {
     let (_dir, db) = temp_db();
 
-    db.save_user("bazya", b"account-blob").unwrap();
-    assert_eq!(db.get_user("bazya").unwrap(), b"account-blob".to_vec());
+    db.save_user("user", b"account-blob").unwrap();
+    assert_eq!(db.get_user("user").unwrap(), b"account-blob".to_vec());
 
-    db.delete_user("bazya").unwrap();
-    assert!(db.get_user("bazya").is_err());
+    db.delete_user("user").unwrap();
+    assert!(db.get_user("user").is_err());
 }
 
 #[test]
 fn get_all_users_returns_everything() {
     let (_dir, db) = temp_db();
 
-    db.save_user("bazya", b"a").unwrap();
-    db.save_user("second_developer", b"b").unwrap();
+    db.save_user("user", b"a").unwrap();
+    db.save_user("second_user", b"b").unwrap();
 
     assert_eq!(db.get_all_users().unwrap().len(), 2);
 }
@@ -49,10 +46,10 @@ fn get_all_users_returns_everything() {
 fn sessions_are_indexed_by_user() {
     let (_dir, db) = temp_db();
 
-    db.save_session("s1", "bazya", b"pickle1").unwrap();
-    db.save_session("s2", "bazya", b"pickle2").unwrap();
+    db.save_session("s1", "user", b"pickle1").unwrap();
+    db.save_session("s2", "user", b"pickle2").unwrap();
 
-    let sessions = db.get_sessions_by_user("bazya").unwrap();
+    let sessions = db.get_sessions_by_user("user").unwrap();
     assert_eq!(sessions.len(), 2);
 }
 

@@ -7,16 +7,9 @@
  * (at your option) any later version.
  */
 
-//! Unit tests for [`Localization`] — the Fluent-backed translation layer.
-//!
-//! Covers translation of a known key, the fallback-to-key behaviour for
-//! unknown keys, locale switching, rejection of unsupported locales, and
-//! argument interpolation.
-//!
-//! The interpolation test uses `contains` rather than an exact match because
-//! Fluent wraps substituted arguments in invisible bidi-isolation characters,
-//! which makes exact string comparison brittle.
-
+/// Unit tests for [`Localization`] — the Fluent-backed translation layer.
+///
+/// Covers translation of a known key, the fallback-to-key behaviour for unknown keys, locale switching, rejection of unsupported locales, and argument interpolation.
 use super::*;
 
 #[test]
@@ -55,8 +48,8 @@ fn unknown_default_locale_still_loads() {
 #[test]
 fn arguments_are_interpolated() {
     let loc = Localization::new("en").unwrap();
-    let args = fluent_args(&[("username", "bazya")]);
+    let args = fluent_args(&[("username", "alice")]);
 
     let out = loc.get_with_args("user-created", Some(&args));
-    assert!(out.contains("bazya"), "interpolated output was: {}", out);
+    assert!(out.contains("alice"), "interpolated output was: {}", out);
 }

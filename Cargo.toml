@@ -17,7 +17,6 @@ gui = ["dep:slint", "dep:arboard"]
 [dependencies]
 aes-gcm = "0.11.0"
 argon2 = "0.5.3"
-base64 = "0.23.1"
 chrono = "0.4.45"
 cipher = "0.5.2"
 colorize = "0.1.0"
@@ -27,12 +26,12 @@ log = "0.4.33"
 rand = "0.10.2"
 serde = "1.0.229"
 serde_json = "1.0.151"
-sha2 = "0.11.0"
 slint = { version = "1.17.1", optional = true, features = ["renderer-software"] }
 arboard = { version = "3.6.1", optional = true, default-features = false }
 unic-langid = "0.9.6"
 vodozemac = "0.10.0"
 dirs = "6.0.0"
+base64 = "0.23.1"
 
 [build-dependencies]
 slint-build = "1"
