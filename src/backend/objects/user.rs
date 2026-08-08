@@ -10,6 +10,7 @@
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use vodozemac::olm::{Account, AccountPickle};
+use zeroize::Zeroize;
 
 use crate::backend::managers::session_manager::SessionManager;
 use crate::error_mapper::MapErrorToString;
@@ -26,6 +27,12 @@ pub struct User {
     pub account: Account,
     pub session_manager: SessionManager,
     pub encryption_key: [u8; KEY_LENGTH],
+}
+
+impl Drop for User {
+    fn drop(&mut self) {
+        self.encryption_key.zeroize();
+    }
 }
 
 impl User {

@@ -32,6 +32,7 @@ unic-langid = "0.9.6"
 vodozemac = "0.10.0"
 dirs = "6.0.0"
 base64 = "0.23.1"
+zeroize = "1.9.0"
 
 [build-dependencies]
 slint-build = "1"

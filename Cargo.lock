@@ -25,6 +25,7 @@ dependencies = [
  "tempfile",
  "unic-langid",
  "vodozemac",
+ "zeroize",
 ]
 
 [[package]]

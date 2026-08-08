@@ -4,25 +4,39 @@
 </div>
 
 > [!WARNING]
->
-> Under active development.
-> See the [Roadmap](#roadmap).
+> Under active development. See the [Roadmap](#roadmap).
 
 **Languages:** [English](README.md) | [Русский](doc/README.ru.md)
 
+# Table of Contents
+
+- [Overview](#overview)
+- [What is This For?](#what-is-this-for)
+- [Supported Platforms](#supported-platforms)
+- [Installation](#installation)
+- [How It Works](#how-it-works)
+- [Architecture](#architecture)
+- [Data Protection](#data-protection)
+- [Features](#features)
+- [FAQ](#faq)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Disclaimer and Terms of Use](#disclaimer-and-terms-of-use)
+
 # Overview
 
-OpenE2E is a manual secure chat app for exchanging encrypted messages over any channel, from SMS and email to messengers, social platforms, or other untrusted channels.
+**OpenE2E** is a manual secure chat app for exchanging encrypted messages over any channel - SMS, email, messengers, social platforms, or other untrusted channels. You encrypt messages locally on your device, copy the encrypted text, and send it anywhere. Only you and the recipient can decrypt it.
 
-The app handles encryption and decryption locally, while you move encrypted payloads between people using whatever channel is available. This makes it useful anywhere direct secure transport is unavailable or inconvenient.
+The app uses **Matrix OLM** (via `voldozemac`) with **AES-256-GCM encryption** and **Perfect Forward Secrecy (PFS)**, ensuring that past messages remain protected even if later keys are compromised. All data stays on your device - there is no cloud sync or server-side storage.
 
-OpenE2E uses **Matrix OLM** via the `voldozemac` library, with **AES-256-GCM** for message encryption and **end-to-end encryption with Perfect Forward Secrecy (PFS)**.
+**Why this matters:** Your private thoughts, plans, and opinions shouldn't be scanned by algorithms, analyzed by companies, or monitored by surveillance systems. OpenE2E keeps your communication visible only to you and the recipient.
 
-More information about the encryption model and internal design: [OLM.md](doc/OLM.md)
+For technical details on the encryption model, see [OLM.md](doc/OLM.md).
 
-# What's This For?
+# What is This For?
 
-**OpenE2E** lets you send messages through *any* channel (text, email, social media, and so on) so that only you and the recipient can read them. You encrypt messages on your device, copy the encrypted text, and paste it anywhere.
+**OpenE2E** lets you send messages through _any_ channel (text, email, social media, and so on) so that only you and the recipient can read them. You encrypt messages on your device, copy the encrypted text, and paste it anywhere.
 
 ## Why Confidentiality Matters
 
@@ -34,38 +48,46 @@ More information about the encryption model and internal design: [OLM.md](doc/OL
 
 **Why end-to-end encryption matters:** When your messages are encrypted, neither companies nor government systems can scan or analyze them. Your communication remains visible only to you and the recipient - beyond the reach of mass monitoring and algorithmic analysis.
 
-OpenE2E ensures that your private messages are protected from interception, analysis, and censorship by third parties. Your data remains under your control.
+# Supported Platforms
 
-# Features
-
-- **Manual Secure Chat** - Exchange encrypted messages by copy-pasting them through any channel
-- **End-to-End Encryption** - Messages are encrypted locally and can only be decrypted by the intended recipient
-- **Perfect Forward Secrecy** - Past messages stay protected even if later keys are compromised
-- **Works Over Any Channel** - SMS, email, messengers, government platforms, and other public channels
-- **Local Storage** - All data stays on your device
-- **Encrypted Storage** - Messages and sessions are stored locally in an encrypted with AES-256-GCM database
-- **Chat-Like Interface** - A clean UI built with **Slint**
-- **Rust-Based** - Memory safe and blazingly fast
-
-# How It Works
-
-1. **Create a Session** - Start a new conversation in the app
-2. **Exchange Public Keys** - Generate your ephemeral public key and share it with your contact by any channel
-3. **Receive Their Key** - Paste your contact's public key into the app to establish the session
-4. **Write a Message** - Enter your message in the app
-5. **Encrypt and Copy** - The app encrypts the message locally and gives you the ciphertext to send anywhere
-6. **Receive Ciphertext** - Paste the encrypted message from your contact into the app
-7. **Decrypt Locally** - The app decrypts it on your device and shows it in a readable chat view
-8. **Continue the Conversation** - Repeat the same process for ongoing secure communication
+| Platform           | Status                   | Notes                                                            |
+| ------------------ | ------------------------ | ---------------------------------------------------------------- |
+| **Linux (64-bit)** | ✅ Fully supported       | Generic glibc-based systems (Debian, Ubuntu, Fedora, Arch, etc.) |
+| **NixOS**          | ✅ Fully supported       | Packaged builds in releases                                      |
+| **Windows 10/11**  | ✅ Fully supported       | 64-bit only                                                      |
+| **Linux ARM**      | ⚠️ Requires manual build | Manual Rust build required                                       |
+| **Termux**         | ⚠️ CLI only              | No GUI support. Manual Rust build required                       |
+| **Android**        | 🔄 Planned               | Not yet available                                                |
+| **MacOS**          | ❌ Untested              | May work, but unsupported and requires manual building.          |
 
 # Installation
 
-## Installation from source
+### Option 1: Pre-built Binaries
 
-### Build with Cargo (parallel)
+1. Go to [Releases](https://codeberg.org/bazelik-dev/OpenE2E/releases) and download the latest binary for your OS (choose GUI for graphical interface or CLI for console interface)
+2. Verify the signature:
+   ```bash
+   gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E*.asc $(find . -maxdepth 1 -name 'OpenE2E*' ! -name '*.asc')
+   ```
+   The key should match: `C4C5BDC6C5E4C96CF12B3E85B7BBEB3BC5439F72` from `bazelik-dev@proton.me`
 
-**Requirements:**
-- Rust
+### Option 2: Build with Cargo
+
+```bash
+git clone https://codeberg.org/bazelik-dev/OpenE2E.git
+cd OpenE2E
+cargo build --release
+```
+
+Add `--features ui` to include the Slint GUI:
+
+```bash
+cargo build --release --features ui
+```
+
+### Option 3: Parallel Build (All Cores)
+
+Uses the build script to compile both CLI and GUI in parallel:
 
 ```bash
 git clone https://codeberg.org/bazelik-dev/OpenE2E.git
@@ -73,16 +95,12 @@ cd OpenE2E
 ./build.sh
 ```
 
-This script builds both CLI and GUI binaries in parallel across all available cores. Outputs are available in:
+**Outputs:**
+
 - CLI: `./OpenE2E-CLI_{linux,windows}/bin/OpenE2E`
 - GUI: `./OpenE2E-GUI_{linux,windows}/bin/OpenE2E`
 
-Platform is automatically detected at build time.
-
-### Build with Nix
-
-**Requirements:**
-- Nix with flakes enabled
+### Option 4: Nix Build
 
 ```bash
 git clone https://codeberg.org/bazelik-dev/OpenE2E.git
@@ -90,74 +108,171 @@ cd OpenE2E
 ./build-nix.sh
 ```
 
-This script builds both CLI and GUI binaries in parallel across all available cores using Nix. Outputs are available in:
+**Outputs:**
+
 - CLI: `./OpenE2E-CLI_NixOS/bin/OpenE2E`
 - GUI: `./OpenE2E-GUI_NixOS/bin/OpenE2E`
 
-Both binaries include all necessary runtime dependencies bundled in their respective `lib/` directories.
+Both binaries include all runtime dependencies in their `lib/` directories.
 
-## Installation from pre-built binaries
+# How It Works
 
-### Installation
+### Step-by-Step Process
 
-- Go to [Releases](https://codeberg.org/bazelik-dev/OpenE2E/releases) and download latest binary (СLI or GUI)
+1. **Create a Session** - Start a new conversation in the app
+2. **Exchange Public Keys** - Generate your ephemeral public key and share it with your contact via any channel
+3. **Receive Their Key** - Paste your contact's public key into the app to establish the session
+4. **Encrypt & Copy** - Write your message, and the app encrypts it locally and gives you the ciphertext
+5. **Send Ciphertext** - Copy and paste the encrypted message through email, SMS, social media, or any other channel
+6. **Receive & Decrypt** - Paste the encrypted message your contact sends back into the app
+7. **Read Locally** - The app decrypts it on your device and displays it in the chat view
+8. **Continue** - Repeat for ongoing secure communication
 
-### Verification
+**Key innovation:** you control the transport. OpenE2E handles encryption, you move the encrypted payloads.
 
-- Download `.asc` signature file from releases tab.
-- Verify: `gpg --auto-key-locate keyserver --keyserver-options auto-key-retrieve --verify OpenE2E*.asc $(find . -maxdepth 1 -name 'OpenE2E*' ! -name '*.asc')`
-- Key should match key published at: https://keys.openpgp.org/vks/v1/by-fingerprint/C4C5BDC6C5E4C96CF12B3E85B7BBEB3BC5439F72
+# Architecture
 
+OpenE2E follows a **separation of concerns** design with a clear backend/frontend split and an object/manager pattern.
 
-# Security Features
+### Project Structure
 
-- **Perfect Forward Secrecy (PFS)** - OLM's ratchet-based design limits the impact of key compromise
-- **End-to-End Encryption** - Only the two endpoints can read message contents
-- **Local Storage Only** - No cloud sync, no server-side message storage
-- **Manual Key Exchange** - No automatic trust assumptions
-- **Channel Agnostic** - Encrypted data can travel through almost any medium
+```
+src/
+├── backend/                   # Core logic
+│   ├── managers/              # Managers handle operations on objects
+│   │   ├── user_manager.rs    # User account creation, authentication
+│   │   ├── session_manager.rs # Session creation, key exchange, state
+│   │   ├── storage_manager.rs # Database operations
+│   │   └── mod.rs
+│   └── objects/               # Data models
+│       ├── user.rs            # User account data
+│       ├── session.rs         # Session state, keys, crypto
+│       ├── message.rs         # Message data structures
+│       └── mod.rs
+│
+├── frontend/                  # UI and user interaction
+│   ├── cli/                   # Command-line interface
+│   ├── gui/                   # Graphical interface
+│   │   └── slint/             # Slint UI layout
+│   ├── fluent_manager.rs      # Localization system
+│   ├── logger.rs              # Logging
+│   └── mod.rs
+│
+├── error_mapper.rs            # Error conversion to string
+├── main.rs                    # Entry point
+└── tests/                     # Unit and integration tests
+```
 
-### Data Protection
+### Design Pattern
 
-Messages and sessions are stored locally in fjall DB, AES-256-GCM encrypts all message data at rest in fjall DB and AES-CBC-HMAC encrypts all sessions and accounts data. Each message uses a randomly generated 12-byte nonce to ensure ciphertext uniqueness.
+**Backend (Objects + Managers):**
 
-All encryption keys are derived from your user password and stored in memory during the session. Keys are never written to disk or persisted after logout.
+- **Objects** (`user.rs`, `session.rs`, `message.rs`) represent data instances
+- **Managers** (`user_manager.rs`, `session_manager.rs`, `storage_manager.rs`) handle all operations on objects
+- Managers interact with storage and perform encryption/decryption logic
+- Clean separation ensures backend logic is independent of UI
 
-# Limitations
+**Frontend (CLI + GUI):**
 
-- Requires manual key exchange
-- Messages must be copied and pasted between channels
-- No multi-device support (DB must be manually shared)
-- Not yet ready for production use
+- **CLI** provides a command-line interface
+- **GUI** uses Slint for a native, lightweight interface
+- Both frontends call the same backend managers, ensuring consistent behavior
+- `fluent_manager.rs` handles localization
+
+### Key Design Benefits
+
+- **Modularity** - Backend can be used by CLI, GUI, or other frontends without changes
+- **Maintainability** - Core logic is isolated from UI code
+- **Localization** - Text strings are centralized in `locales/` directory
+
+# Data Protection
+
+- **Sessions & Accounts:** Encrypted in fjall DB with AES-256-GCM
+- **Messages:** Encrypted at rest with AES-256-GCM and random nonce
+- **Passwords:** Used only to derive encryption keys. They're never stored
+- **Local Only:** No cloud sync, no server-side storage, no third-party access
+
+# Features
+
+- **Manual Secure Chat** - Exchange encrypted messages via copy-paste through any channel
+- **Perfect Forward Secrecy** - Past messages stay protected even if keys are later compromised
+- **End-to-End Encryption** - Messages encrypted locally. Only sender and recipient can read them
+- **Works Over Any Channel** - SMS, email, messengers, social platforms, government services, etc.
+- **Local Storage Only** - All data stays on your device
+- **AES-256-GCM Encryption** - Industrial-grade encryption for messages and session storage
+- **Dual Interface** - CLI for power users and Termux. GUI for general use
+- **Multi-Language** - English and Russian localization
+- **Rust-Based** - Memory-safe, blazingly fast, and secure
+
+# FAQ
+
+**Q: Why would I use this instead of Signal, WhatsApp, or Telegram?**
+
+A: Those apps require dedicated apps on both ends and control the transport. OpenE2E lets you send encrypted messages through _any_ channel you already use - your existing email, SMS, social media, etc. You don't need both people to install anything special. It's useful when:
+
+- Direct secure transport is unavailable
+- You want to add encryption to existing communication channels
+- You need a "just copy-paste" workflow
+- You prefer to control the transport layer
+
+**Q: Does OpenE2E support file attachments?**
+
+A: Not yet. File support is on the [Roadmap](#roadmap).
+
+**Q: Can I import/export my messages, sessions and accounts?**
+
+A: Currently, messages are stored in the local encrypted database only. Storage import/export support is on the [Roadmap](#roadmap).
+
+**Q: What happens if I forget my password?**
+
+A: Your password is used to derive the encryption keys for your database. If you forget it, your messages and sessions cannot be recovered. There is no password reset or recovery mechanism.
+
+**Q: Is my data safe if my device is compromised?**
+
+A: Your messages are encrypted with AES-256-GCM, and the encryption keys are derived from your password using Argon2. If an attacker accesses your device stored messages remain encrypted and cannot be read without your password
+
+However, if the attacker can access your device while you're logged in, they can read message contents in memory. This is a general limitation of any local-only system.
+
+**Q: Can developers see my messages?**
+
+A: No. OpenE2E runs entirely on your device. There are no servers, no accounts on external services, and no way for developers to access your data. The source code is open for you to verify this.
+
+**Q: How do I verify the public key identity of my contact?**
+
+A: OpenE2E does not automatically verify keys (it's pretty much impossible without a trusted channel). You should verify your contact's public key identity through a separate, trusted channel.
+
+**Q: What if I lose my encrypted database file?**
+
+A: Your encrypted database file (stored locally) contains all your messages and session keys. If you delete or lose it, those messages cannot be recovered. Back up your encrypted database file to a safe location if you want to preserve your message history.
 
 # Roadmap
 
 - [x] CLI prototype
 - [x] Core encryption and key exchange
 - [x] Encrypted message send/receive
-- [x] Local session storage
-- [x] Message DB storage
-- [x] Rus localisation
-- [x] CLI chat app, demo release
-- [x] GUI chat app with Slint
-- [ ] File sending
-- [ ] Improved GUI
-- [ ] Obfuscation mode
-- [ ] Packaging and release builds
+- [x] Local session and database storage
+- [x] Russian UI localization
+- [x] CLI chat app demo
+- [x] GUI chat app (Slint-based)
+- [x] Packaging and release builds
+- [] File Sending
+- [] Data import/export
+- [] Obfuscation mode (steganography for message hiding)
+- [] Android GUI
 
-# Screenshots
+# Acknowledgments
 
-### User Management
-![User list and creation](./doc/img/screenshots/users.jpg)
+Some of the open source packages we use:
 
-### Login
-![Login page](./doc/img/screenshots/login.jpg)
+- **[voldozemac](https://github.com/poljar/voldozemac)** - OLM protocol implementation
+- **[Slint](https://slint.rs/)** - Lightweight GUI framework
+- **[fjall](https://github.com/fjall-rs/fjall)** - Embedded key-value database
+- **[Rust](https://www.rust-lang.org/)** - Memory-safe systems programming language
+- **Matrix Protocol** - Open standard for decentralized communication
 
-### Session Creation
-![Session creation](./doc/img/screenshots/session.jpg)
+# Contributing
 
-### Chat
-![Chatting](./doc/img/screenshots/chat.jpg)
+Contributions are welcome! Please submit issues and pull requests on [Codeberg](https://codeberg.org/bazelik-dev/OpenE2E).
 
 # License
 
@@ -165,39 +280,34 @@ This project is licensed under the **GNU General Public License v3.0**. See the 
 
 You are free to use, modify, and distribute this software under the terms of the GPL 3.0. For more information, visit https://www.gnu.org/licenses/gpl-3.0.html
 
-# Contributing
-
-Contributions are welcome! Please submit issues and pull requests on [Codeberg](https://codeberg.org/bazelik-dev/OpenE2E).
-
 # Disclaimer and Terms of Use
 
-OpenE2E is provided as a tool for protecting private communication in accordance 
-with free and open-source software principles.
+OpenE2E is provided as-is for educational and personal use. While the encryption is sound, the application is still in active development. Always test thoroughly before relying on it for sensitive communications.
 
-## Your Responsibility
+### Your Responsibility
 
 Users are fully responsible for:
+
 - Verifying that their use complies with the laws of their jurisdiction
 - All legal and ethical consequences of using this tool
 - Respecting the rights of others
 
-## Limitations of Our Liability
+### Limitations of Our Liability
 
 The developer(s) of OpenE2E:
+
 - Do not bear legal responsibility for the use of this software
 - Do not control or monitor its application (the application runs locally on your device)
 - Do not provide legal or technical support for unlawful activities
 - Explicitly do not endorse use for criminal purposes
 
-## Lawful Use
-
-OpenE2E is designed to protect lawful private communication, including:
-- Business correspondence
-- Personal privacy
-- Journalism and source protection
-- Protection against mass surveillance
-
 Before using this tool, ensure that your use complies with the laws of your jurisdiction.
 
+<div align="center">
 
-Copyright (C) 2026 bazelik-dev
+**[back to top](#table-of-contents)**
+
+**Copyright (C) 2026 bazelik-dev**
+
+</div>
+```
