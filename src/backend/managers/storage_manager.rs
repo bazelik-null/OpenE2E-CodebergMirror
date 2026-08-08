@@ -9,6 +9,7 @@
 
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::{debug, error, info};
+use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -461,6 +462,25 @@ impl WorkerHandle {
     /// Returns a reference to the autosave worker
     pub fn worker(&self) -> &Arc<DatabaseManager> {
         &self.worker
+    }
+}
+
+/// Returns standard system storage dir
+pub fn get_storage_filepath() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        let mut path = dirs::data_dir().expect("Could not determine data directory");
+        path.push("OpenE2E");
+        path.push("storage.db");
+        path
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let mut path = dirs::data_dir().expect("Could not determine data directory");
+        path.push("OpenE2E");
+        path.push("storage.db");
+        path
     }
 }
 

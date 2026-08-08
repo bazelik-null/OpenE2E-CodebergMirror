@@ -57,9 +57,10 @@ impl Application {
         println!();
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());
         println!(
-            "{0} {1} v{2} {0}",
+            "{0} {1} {2}{3} {0}",
             "#".repeat(3).cyan(),
             self.localization.get("welcome-header").cyan(),
+            "v".cyan(),
             VERSION.cyan()
         );
         println!("{}", "#".repeat(HEADER_WIDTH).cyan());

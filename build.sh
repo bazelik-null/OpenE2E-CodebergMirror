@@ -3,6 +3,7 @@ set -e
 
 # Store background job PIDs
 PIDS=()
+BUILD_FAILED=0
 
 # Cleanup function
 cleanup() {
@@ -55,15 +56,23 @@ cargo build --release --features gui -j "$CORES_PER_JOB" > gui-build.log 2>&1 &
 PIDS+=($!)
 echo "Building GUI (see gui-build.log)..."
 
-# Wait and check if any job failed
-if ! wait; then
-    echo ""
-    echo "One or more builds failed. See logs." >&2
-    echo ""
+# Wait for each job and check status
+for pid in "${PIDS[@]}"; do
+    if ! wait "$pid"; then
+        BUILD_FAILED=1
+    fi
+done
+
+# Report results
+echo ""
+if [ $BUILD_FAILED -eq 1 ]; then
+    echo "Build failed. See logs:" >&2
+    echo "   CLI log: cli-build.log" >&2
+    echo "   GUI log: gui-build.log" >&2
+    echo "" >&2
     exit 1
 fi
 
-echo ""
 echo "Packaging binaries..."
 
 # Copy binaries to output directories
@@ -71,6 +80,6 @@ cp "target/release/OpenE2E${BINARY_EXT}" "OpenE2E-CLI_${PLATFORM}/bin/OpenE2E${B
 cp "target/release/OpenE2E${BINARY_EXT}" "OpenE2E-GUI_${PLATFORM}/bin/OpenE2E${BINARY_EXT}"
 
 echo ""
-echo "Build complete:"
+echo "Build succeeded:"
 echo "   CLI: ./OpenE2E-CLI_${PLATFORM}/bin/OpenE2E${BINARY_EXT}"
 echo "   GUI: ./OpenE2E-GUI_${PLATFORM}/bin/OpenE2E${BINARY_EXT}"

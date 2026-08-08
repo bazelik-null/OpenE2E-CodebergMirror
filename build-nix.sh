@@ -3,6 +3,7 @@ set -e
 
 # Store background job PIDs
 PIDS=()
+BUILD_FAILED=0
 
 # Cleanup function
 cleanup() {
@@ -45,15 +46,23 @@ nix build .#gui -o OpenE2E-GUI_NixOS --cores "$CORES_PER_JOB" --no-eval-cache > 
 PIDS+=($!)
 echo "Building GUI (see gui-build.log)..."
 
-# Wait and check if any job failed
-if ! wait; then
-    echo ""
-    echo "One or more builds failed. See logs." >&2
-    echo ""
+# Wait for each job and check status
+for pid in "${PIDS[@]}"; do
+    if ! wait "$pid"; then
+        BUILD_FAILED=1
+    fi
+done
+
+# Report results
+echo ""
+if [ $BUILD_FAILED -eq 1 ]; then
+    echo "Build failed. See logs:" >&2
+    echo "   CLI log: cli-build.log" >&2
+    echo "   GUI log: gui-build.log" >&2
+    echo "" >&2
     exit 1
 fi
 
-echo ""
-echo "Build complete:"
+echo "Build succeeded:"
 echo "   CLI: ./OpenE2E-CLI_NixOS/bin/OpenE2E"
 echo "   GUI: ./OpenE2E-GUI_NixOS/bin/OpenE2E"

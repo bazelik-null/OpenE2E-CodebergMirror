@@ -37,7 +37,7 @@
         ];
 
         # Function to build CLI and GUI variants with different features and dependencies
-        mkPackage = { name, features, libraries }:
+        mkPackage = { features, libraries }:
           pkgs.rustPlatform.buildRustPackage {
             pname = "OpenE2E";
             inherit version;
@@ -74,9 +74,9 @@
         packages = {
           default = self.packages.${system}.cli;
           # CLI package with no GUI features or dependencies
-          cli = mkPackage { name = "cli"; features = ""; libraries = []; };
+          cli = mkPackage { features = ""; libraries = []; };
           # GUI package with feature flag and graphical libraries bundled
-          gui = mkPackage { name = "gui"; features = "gui"; libraries = guiLibraries; };
+          gui = mkPackage { features = "gui"; libraries = guiLibraries; };
         };
 
         apps = {

@@ -11,7 +11,9 @@ use colorize::AnsiColor;
 use rand::RngExt;
 use std::time::Duration;
 
-use crate::backend::managers::storage_manager::{BackgroundWorker, WorkerHandle};
+use crate::backend::managers::storage_manager::{
+    BackgroundWorker, WorkerHandle, get_storage_filepath,
+};
 use crate::backend::objects::message::Message;
 use crate::backend::objects::user::{SerializedUserTurple, User};
 use crate::error_mapper::MapErrorToString;
@@ -36,8 +38,6 @@ impl SerializedUser {
 }
 
 // UserManager
-
-const STORAGE_FILEPATH: &str = "OpenE2E/storage.db";
 const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(60);
 
 pub struct UserManager {
@@ -48,13 +48,11 @@ pub struct UserManager {
 
 impl UserManager {
     pub fn new() -> Result<Self, String> {
-        Self::with_storage_path(STORAGE_FILEPATH)
+        let storage_path = get_storage_filepath();
+        let storage_path = storage_path.to_string_lossy().into_owned();
+        Self::with_storage_path(&storage_path)
     }
 
-    /// Like [`Self::new`] but opens the database at a custom path.
-    ///
-    /// Used by integration tests to point each test at its own temporary
-    /// database so they stay isolated and can run in parallel.
     pub fn with_storage_path(db_path: &str) -> Result<Self, String> {
         let worker = BackgroundWorker::new(AUTOSAVE_INTERVAL, db_path)?;
         let handle = worker.start();
