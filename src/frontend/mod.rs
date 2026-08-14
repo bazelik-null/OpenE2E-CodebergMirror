@@ -13,5 +13,5 @@ pub mod cli;
 #[cfg(feature = "gui")]
 pub mod gui;
 
-mod fluent_manager;
+mod fluent_service;
 pub mod logger;

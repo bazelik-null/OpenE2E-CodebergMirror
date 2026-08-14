@@ -12,7 +12,7 @@ use argon2::{Argon2, PasswordHasher};
 use vodozemac::olm::{Account, AccountPickle};
 use zeroize::Zeroize;
 
-use crate::backend::managers::session_manager::SessionManager;
+use crate::backend::services::session_service::SessionService;
 use crate::error_mapper::MapErrorToString;
 
 const KEY_LENGTH: usize = 32;
@@ -25,7 +25,7 @@ pub struct User {
     pub name: String,
     pub salt: String,
     pub account: Account,
-    pub session_manager: SessionManager,
+    pub session_service: SessionService,
     pub encryption_key: [u8; KEY_LENGTH],
 }
 
@@ -47,7 +47,7 @@ impl User {
         Ok(Self {
             name: name.to_string(),
             salt: salt_b64,
-            session_manager: SessionManager::default(),
+            session_service: SessionService::default(),
             account,
             encryption_key,
         })
@@ -82,13 +82,13 @@ impl User {
         let encryption_key = Self::derive_encryption_key(salt, password)?;
 
         let account = Self::decrypt_account(&encrypted_account, &encryption_key)?;
-        let mut session_manager = SessionManager::default();
-        session_manager.import_sessions(sessions_data, &encryption_key)?;
+        let mut session_service = SessionService::default();
+        session_service.import_sessions(sessions_data, &encryption_key)?;
 
         Ok(Self {
             name: username,
             salt: salt_string,
-            session_manager,
+            session_service,
             account,
             encryption_key,
         })
@@ -96,7 +96,7 @@ impl User {
 
     /// Serializes all sessions using the encryption key
     fn serialize_sessions(&self) -> Result<Vec<(String, String)>, String> {
-        self.session_manager.export_sessions(&self.encryption_key)
+        self.session_service.export_sessions(&self.encryption_key)
     }
 
     /// Encrypts the account pickle using the encryption key
@@ -123,12 +123,12 @@ impl User {
 
     /// Decrypts ciphertext using the active session
     pub fn encrypt(&mut self, plaintext: &str) -> Result<String, String> {
-        self.session_manager.encrypt(plaintext)
+        self.session_service.encrypt(plaintext)
     }
 
     /// Decrypts ciphertext
     pub fn decrypt(&mut self, ciphertext_b64: &str) -> Result<String, String> {
-        self.session_manager.decrypt(ciphertext_b64)
+        self.session_service.decrypt(ciphertext_b64)
     }
 }
 

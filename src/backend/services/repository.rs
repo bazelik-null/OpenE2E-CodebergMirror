@@ -9,7 +9,7 @@
 
 use std::time::Duration;
 
-use crate::backend::managers::storage_manager::{
+use crate::backend::services::storage_service::{
     BackgroundWorker, WorkerHandle, get_storage_filepath,
 };
 

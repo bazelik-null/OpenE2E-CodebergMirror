@@ -13,13 +13,13 @@ use colorize::AnsiColor;
 use log::{error, info};
 use std::io::{self, Write};
 
-use crate::backend::managers::message_manager;
-use crate::backend::managers::repository::Repository;
-use crate::backend::managers::user_manager::UserManager;
+use crate::backend::services::message_service;
+use crate::backend::services::repository::Repository;
+use crate::backend::services::user_service::UserService;
 use crate::backend::objects::session::SessionInstance;
 use crate::backend::objects::user::User;
 use crate::frontend::cli::commands::{Command, scan_commands};
-use crate::frontend::fluent_manager::{Localization, fluent_args};
+use crate::frontend::fluent_service::{Localization, fluent_args};
 
 const HEADER_WIDTH: usize = 36;
 const SECTION_WIDTH: usize = 40;
@@ -27,7 +27,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub struct Application {
     repository: Repository,
-    user_manager: UserManager,
+    user_service: UserService,
     should_exit: bool,
     localization: Localization,
 }
@@ -38,11 +38,11 @@ impl Application {
             .map_err(|e| format!("Failed to initialize localization: {}", e))?;
 
         let repository = Repository::new()?;
-        let user_manager = UserManager::new(&repository.db_handle)?;
+        let user_service = UserService::new(&repository.db_handle)?;
 
         Ok(Self {
             repository,
-            user_manager,
+            user_service,
             should_exit: false,
             localization,
         })
@@ -131,7 +131,7 @@ impl Application {
 
     fn user_creation(&mut self, name: &str, password: &str) -> Result<(), String> {
         info!("{}", self.localization.get("creating-user"));
-        self.user_manager.new_user(name, password)?;
+        self.user_service.new_user(name, password)?;
 
         let args = fluent_args(&[("username", name)]);
         info!(
@@ -139,15 +139,15 @@ impl Application {
             self.localization.get_with_args("user-created", Some(&args))
         );
 
-        self.user_manager.login(name, password)?;
-        self.user_manager.autosave(&self.repository.db_handle)?;
+        self.user_service.login(name, password)?;
+        self.user_service.autosave(&self.repository.db_handle)?;
         println!();
 
         Ok(())
     }
 
     fn user_deletion(&mut self, name: &str) -> Result<(), String> {
-        self.user_manager
+        self.user_service
             .delete_user(&self.repository.db_handle, name)?;
 
         let args = fluent_args(&[("username", name)]);
@@ -156,7 +156,7 @@ impl Application {
             self.localization.get_with_args("user-deleted", Some(&args))
         );
 
-        self.user_manager.autosave(&self.repository.db_handle)?;
+        self.user_service.autosave(&self.repository.db_handle)?;
         println!();
 
         Ok(())
@@ -164,7 +164,7 @@ impl Application {
 
     fn users_list(&self) {
         self.display_section(self.localization.get("section-user-management"));
-        let usernames = self.user_manager.get_usernames();
+        let usernames = self.user_service.get_usernames();
 
         if usernames.is_empty() {
             println!("{}", self.localization.get("no-users-found"));
@@ -178,7 +178,7 @@ impl Application {
     }
 
     fn user_login(&mut self, name: &str, password: &str) -> Result<(), String> {
-        self.user_manager.login(name, password)?;
+        self.user_service.login(name, password)?;
 
         let args = fluent_args(&[("username", name)]);
         info!(
@@ -193,9 +193,9 @@ impl Application {
     }
 
     fn user_logout(&mut self) -> Result<(), String> {
-        self.user_manager.logout();
+        self.user_service.logout();
         info!("{}", self.localization.get("logged-out"));
-        self.user_manager.autosave(&self.repository.db_handle)?;
+        self.user_service.autosave(&self.repository.db_handle)?;
         println!();
 
         Ok(())
@@ -206,14 +206,14 @@ impl Application {
 
         // Check if logged in
         let _ = self
-            .user_manager
+            .user_service
             .get_current_user()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
         let session_type = self.prompt_session_type()?;
 
         let user = self
-            .user_manager
+            .user_service
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
@@ -232,7 +232,7 @@ impl Application {
                 .get_with_args("session-created", Some(&args))
         );
 
-        self.user_manager.autosave(&self.repository.db_handle)?;
+        self.user_service.autosave(&self.repository.db_handle)?;
         println!();
 
         Ok(())
@@ -240,12 +240,12 @@ impl Application {
 
     fn session_deletion(&mut self, name: &str) -> Result<(), String> {
         let user = self
-            .user_manager
+            .user_service
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
         let username = user.name.clone();
 
-        user.session_manager
+        user.session_service
             .delete_session_full(&self.repository.db_handle, &username, name)?;
 
         let args = fluent_args(&[("session_name", name)]);
@@ -255,7 +255,7 @@ impl Application {
                 .get_with_args("session-deleted", Some(&args))
         );
 
-        self.user_manager.autosave(&self.repository.db_handle)?;
+        self.user_service.autosave(&self.repository.db_handle)?;
         println!();
 
         Ok(())
@@ -265,11 +265,11 @@ impl Application {
         self.display_section(self.localization.get("section-session-management"));
 
         let user = self
-            .user_manager
+            .user_service
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        let session_names = user.session_manager.get_session_names();
+        let session_names = user.session_service.get_session_names();
 
         if session_names.is_empty() {
             println!("{}", self.localization.get("no-sessions-found"));
@@ -286,11 +286,11 @@ impl Application {
 
     fn session_open(&mut self, name: &str) -> Result<(), String> {
         let user = self
-            .user_manager
+            .user_service
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        user.session_manager.select_session(name)?;
+        user.session_service.select_session(name)?;
 
         let args = fluent_args(&[("session_name", name)]);
         info!(
@@ -306,13 +306,13 @@ impl Application {
 
     fn session_close(&mut self) -> Result<(), String> {
         let user = self
-            .user_manager
+            .user_service
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        user.session_manager.deselect_session();
+        user.session_service.deselect_session();
         info!("{}", self.localization.get("session-closed"));
-        self.user_manager.autosave(&self.repository.db_handle)?;
+        self.user_service.autosave(&self.repository.db_handle)?;
         println!();
 
         Ok(())
@@ -322,14 +322,14 @@ impl Application {
         println!();
 
         let user = self
-            .user_manager
+            .user_service
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        let encrypted = message_manager::encrypt(&self.repository.db_handle, user, text)?;
+        let encrypted = message_service::encrypt(&self.repository.db_handle, user, text)?;
         println!("{}", encrypted);
 
-        self.user_manager.autosave(&self.repository.db_handle)?;
+        self.user_service.autosave(&self.repository.db_handle)?;
         println!();
 
         Ok(())
@@ -339,14 +339,14 @@ impl Application {
         println!();
 
         let user = self
-            .user_manager
+            .user_service
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        let decrypted = message_manager::decrypt(&self.repository.db_handle, user, text)?;
+        let decrypted = message_service::decrypt(&self.repository.db_handle, user, text)?;
         println!("{}", decrypted);
 
-        self.user_manager.autosave(&self.repository.db_handle)?;
+        self.user_service.autosave(&self.repository.db_handle)?;
         println!();
 
         Ok(())
@@ -356,11 +356,11 @@ impl Application {
         self.display_section(self.localization.get("history-label"));
 
         let user = self
-            .user_manager
+            .user_service
             .get_current_user()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        let messages = message_manager::get_session_messages(&self.repository.db_handle, user)?;
+        let messages = message_service::get_session_messages(&self.repository.db_handle, user)?;
         println!("{}", messages);
 
         Ok(())
@@ -549,14 +549,14 @@ fn create_inbound_session(
     let first_message = prompt_input();
     println!();
 
-    user.session_manager.establish_in_session(
+    user.session_service.establish_in_session(
         &mut user.account,
         name,
         &remote_keys,
         &first_message,
     )?;
 
-    user.session_manager.select_session(name)
+    user.session_service.select_session(name)
 }
 
 fn create_outbound_session(
@@ -574,13 +574,13 @@ fn create_outbound_session(
     let remote_keys = prompt_input();
     println!();
 
-    user.session_manager
+    user.session_service
         .establish_out_session(&mut user.account, name, &remote_keys)?;
-    user.session_manager.select_session(name)?;
+    user.session_service.select_session(name)?;
 
     println!("{}", localization.get("session-established").green());
 
-    let init_message = user.session_manager.encrypt("")?;
+    let init_message = user.session_service.encrypt("")?;
     println!("{}", init_message.bold());
 
     Ok(())

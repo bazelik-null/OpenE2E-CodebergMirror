@@ -7,7 +7,7 @@
  * (at your option) any later version.
  */
 
-use crate::frontend::fluent_manager::Localization;
+use crate::frontend::fluent_service::Localization;
 
 use super::Strings;
 

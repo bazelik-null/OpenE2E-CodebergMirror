@@ -10,28 +10,28 @@
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::{
-    Localizer, MainWindow, Manager, Messages, RepositoryCell, fail, fail_key, get_session_names,
+    Localizer, MainWindow, Service, Messages, RepositoryCell, fail, fail_key, get_session_names,
     refresh_messages, refresh_users, status,
 };
 
 pub(super) fn wire_auth(
     ui: &MainWindow,
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     messages: &Messages,
     loc: &Localizer,
 ) {
-    wire_login(ui, manager, loc);
-    wire_create_user(ui, repository, manager, loc);
-    wire_logout(ui, repository, manager, messages, loc);
-    wire_delete_user(ui, repository, manager, loc);
+    wire_login(ui, service, loc);
+    wire_create_user(ui, repository, service, loc);
+    wire_logout(ui, repository, service, messages, loc);
+    wire_delete_user(ui, repository, service, loc);
 }
 
 // Login
 
-fn wire_login(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
+fn wire_login(ui: &MainWindow, service: &Service, loc: &Localizer) {
     let ui_weak = ui.as_weak();
-    let manager = manager.clone();
+    let service = service.clone();
     let loc = loc.clone();
 
     ui.on_login(move |name, password| {
@@ -42,9 +42,9 @@ fn wire_login(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
         }
 
         let result = {
-            let mut mgr = manager.borrow_mut();
-            mgr.login(name.as_str(), password.as_str())
-                .map(|()| get_session_names(&mgr))
+            let mut srv = service.borrow_mut();
+            srv.login(name.as_str(), password.as_str())
+                .map(|()| get_session_names(&srv))
         };
 
         match result {
@@ -77,11 +77,11 @@ fn handle_login_success(ui: &MainWindow, name: &SharedString, sessions: Vec<Shar
 fn wire_create_user(
     ui: &MainWindow,
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     loc: &Localizer,
 ) {
     let ui_weak = ui.as_weak();
-    let manager = manager.clone();
+    let service = service.clone();
     let repository = repository.clone();
     let loc = loc.clone();
 
@@ -92,11 +92,11 @@ fn wire_create_user(
             return;
         }
 
-        let result = create_user_internal(&repository, &manager, name.as_str(), password.as_str());
+        let result = create_user_internal(&repository, &service, name.as_str(), password.as_str());
 
         match result {
             Ok(sessions) => {
-                refresh_users(&ui, &manager);
+                refresh_users(&ui, &service);
                 handle_login_success(&ui, &name, sessions);
                 status(&ui, &loc, "status-user-created");
             }
@@ -107,18 +107,18 @@ fn wire_create_user(
 
 fn create_user_internal(
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     name: &str,
     password: &str,
 ) -> Result<Vec<SharedString>, String> {
-    let mut mgr = manager.borrow_mut();
+    let mut srv = service.borrow_mut();
     let repo = &repository.borrow();
 
-    mgr.new_user(name, password)?;
-    mgr.login(name, password)?;
-    mgr.autosave(&repo.db_handle)?;
+    srv.new_user(name, password)?;
+    srv.login(name, password)?;
+    srv.autosave(&repo.db_handle)?;
 
-    Ok(get_session_names(&mgr))
+    Ok(get_session_names(&srv))
 }
 
 // Logout
@@ -126,12 +126,12 @@ fn create_user_internal(
 fn wire_logout(
     ui: &MainWindow,
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     messages: &Messages,
     loc: &Localizer,
 ) {
     let ui_weak = ui.as_weak();
-    let manager = manager.clone();
+    let service = service.clone();
     let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
@@ -139,21 +139,21 @@ fn wire_logout(
     ui.on_logout(move || {
         let ui = ui_weak.unwrap();
 
-        perform_logout(&repository, &manager);
+        perform_logout(&repository, &service);
         clear_ui_state(&ui, &messages);
-        refresh_users(&ui, &manager);
+        refresh_users(&ui, &service);
 
         status(&ui, &loc, "status-logged-out");
     });
 }
 
-fn perform_logout(repository: &RepositoryCell, manager: &Manager) {
-    let mut mgr = manager.borrow_mut();
+fn perform_logout(repository: &RepositoryCell, service: &Service) {
+    let mut srv = service.borrow_mut();
     let repo = &repository.borrow();
 
-    mgr.logout();
+    srv.logout();
 
-    if let Err(e) = mgr.autosave(&repo.db_handle) {
+    if let Err(e) = srv.autosave(&repo.db_handle) {
         log::error!("Autosave on logout failed: {}", e);
     }
 }
@@ -176,11 +176,11 @@ fn clear_ui_state(ui: &MainWindow, messages: &Messages) {
 fn wire_delete_user(
     ui: &MainWindow,
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     loc: &Localizer,
 ) {
     let ui_weak = ui.as_weak();
-    let manager = manager.clone();
+    let service = service.clone();
     let repository = repository.clone();
     let loc = loc.clone();
 
@@ -192,10 +192,10 @@ fn wire_delete_user(
         }
 
         let result = {
-            let mut mgr = manager.borrow_mut();
+            let mut srv = service.borrow_mut();
             let repo = repository.borrow();
 
-            mgr.delete_user(&repo.db_handle, name.as_str())
+            srv.delete_user(&repo.db_handle, name.as_str())
         };
 
         match result {
@@ -203,7 +203,7 @@ fn wire_delete_user(
                 if ui.get_login_user() == name {
                     ui.set_login_user(SharedString::new());
                 }
-                refresh_users(&ui, &manager);
+                refresh_users(&ui, &service);
                 status(&ui, &loc, "status-user-deleted");
             }
             Err(e) => fail(&ui, &e),

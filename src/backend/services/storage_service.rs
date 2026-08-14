@@ -17,18 +17,18 @@ use std::time::Duration;
 use crate::error_mapper::MapErrorToString;
 
 /// Manages all autosave operations and DB
-pub struct DatabaseManager {
+pub struct DatabaseService {
     db: Arc<Database>,
     pub shutdown_pair: (Arc<Mutex<bool>>, Condvar),
 }
 
-impl DatabaseManager {
-    /// Creates a new manager and initializes the database
+impl DatabaseService {
+    /// Creates a new service and initializes the database
     pub fn new(db_path: &str) -> Result<Self, String> {
         let db = Self::initialize_database(db_path)?;
         info!("AutosaveWorker initialized with database at: {}", db_path);
 
-        Ok(DatabaseManager {
+        Ok(DatabaseService {
             db: Arc::new(db),
             shutdown_pair: (Arc::new(Mutex::new(false)), Condvar::new()),
         })
@@ -385,16 +385,16 @@ impl DatabaseManager {
 
 /// Background worker that performs periodic autosaves
 pub struct BackgroundWorker {
-    manager: Arc<DatabaseManager>,
+    service: Arc<DatabaseService>,
     autosave_interval: Duration,
 }
 
 impl BackgroundWorker {
     /// Creates a new background worker with the specified autosave interval
     pub fn new(autosave_interval: Duration, db_path: &str) -> Result<Self, String> {
-        let worker = DatabaseManager::new(db_path)?;
+        let worker = DatabaseService::new(db_path)?;
         Ok(BackgroundWorker {
-            manager: Arc::new(worker),
+            service: Arc::new(worker),
             autosave_interval,
         })
     }
@@ -402,7 +402,7 @@ impl BackgroundWorker {
     /// Starts the background worker thread
     /// The worker will periodically flush the database and perform maintenance until shutdown is requested via the returned handle
     pub fn start(self) -> WorkerHandle {
-        let worker = Arc::clone(&self.manager);
+        let worker = Arc::clone(&self.service);
         let interval = self.autosave_interval;
 
         let handle = thread::spawn(move || {
@@ -431,7 +431,7 @@ impl BackgroundWorker {
         });
 
         WorkerHandle {
-            worker: Arc::clone(&self.manager),
+            worker: Arc::clone(&self.service),
             thread_handle: handle,
         }
     }
@@ -439,7 +439,7 @@ impl BackgroundWorker {
 
 /// Handle for managing the background worker
 pub struct WorkerHandle {
-    worker: Arc<DatabaseManager>,
+    worker: Arc<DatabaseService>,
     thread_handle: JoinHandle<()>,
 }
 
@@ -460,7 +460,7 @@ impl WorkerHandle {
     }
 
     /// Returns a reference to the autosave worker
-    pub fn worker(&self) -> &Arc<DatabaseManager> {
+    pub fn worker(&self) -> &Arc<DatabaseService> {
         &self.worker
     }
 }
@@ -485,5 +485,5 @@ pub fn get_storage_filepath() -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "../../tests/storage_manager.rs"]
+#[path = "../../tests/storage_service.rs"]
 mod tests;

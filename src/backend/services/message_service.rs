@@ -10,7 +10,7 @@
 use colorize::AnsiColor;
 use rand::RngExt;
 
-use crate::backend::managers::storage_manager::WorkerHandle;
+use crate::backend::services::storage_service::WorkerHandle;
 use crate::backend::objects::message::Message;
 use crate::backend::objects::user::User;
 
@@ -21,7 +21,7 @@ pub fn encrypt(
     plaintext: &str,
 ) -> Result<String, String> {
     let session_name = user
-        .session_manager
+        .session_service
         .get_current_session()
         .ok_or_else(|| "No session selected".to_string())?
         .name
@@ -51,7 +51,7 @@ pub fn decrypt(
     ciphertext_b64: &str,
 ) -> Result<String, String> {
     let session_name = user
-        .session_manager
+        .session_service
         .get_current_session()
         .ok_or_else(|| "No session selected".to_string())?
         .name
@@ -77,7 +77,7 @@ pub fn decrypt(
 /// Retrieves all messages from a session, sorts by timestamp, and formats them for display
 pub fn get_session_messages(db_handle: &WorkerHandle, user: &User) -> Result<String, String> {
     let session_name = user
-        .session_manager
+        .session_service
         .get_current_session()
         .ok_or_else(|| "No session selected".to_string())?
         .name
@@ -134,7 +134,7 @@ pub fn get_session_history(
     user: &User,
 ) -> Result<Vec<(u64, String, String)>, String> {
     let session_name = user
-        .session_manager
+        .session_service
         .get_current_session()
         .ok_or_else(|| "No session selected".to_string())?
         .name

@@ -12,10 +12,10 @@ use std::rc::Rc;
 
 use slint::{ModelRc, SharedString, VecModel};
 
-use crate::backend::managers::message_manager;
-use crate::backend::managers::repository::Repository;
-use crate::backend::managers::user_manager::UserManager;
-use crate::frontend::fluent_manager::Localization;
+use crate::backend::services::message_service;
+use crate::backend::services::repository::Repository;
+use crate::backend::services::user_service::UserService;
+use crate::frontend::fluent_service::Localization;
 
 slint::include_modules!();
 
@@ -26,7 +26,7 @@ mod localization;
 mod session;
 
 // Type aliases for wrappers
-type Manager = Rc<RefCell<UserManager>>;
+type Service = Rc<RefCell<UserService>>;
 type RepositoryCell = Rc<RefCell<Repository>>;
 type Messages = Rc<VecModel<ChatLine>>;
 type Localizer = Rc<RefCell<Localization>>;
@@ -40,13 +40,13 @@ pub fn run() -> Result<(), String> {
     let ui = MainWindow::new().map_err(|e| e.to_string())?;
 
     let repository = Rc::new(RefCell::new(Repository::new()?));
-    let manager = Rc::new(RefCell::new(UserManager::new(
+    let service = Rc::new(RefCell::new(UserService::new(
         &repository.borrow().db_handle,
     )?));
     let messages = Rc::new(VecModel::default());
 
-    initialize_ui(&ui, &manager, &messages)?;
-    wire_callbacks(&ui, &repository, &manager, &messages);
+    initialize_ui(&ui, &service, &messages)?;
+    wire_callbacks(&ui, &repository, &service, &messages);
 
     ui.run().map_err(|e| e.to_string())?;
 
@@ -56,9 +56,9 @@ pub fn run() -> Result<(), String> {
 
 // Initialization
 
-fn initialize_ui(ui: &MainWindow, manager: &Manager, messages: &Messages) -> Result<(), String> {
+fn initialize_ui(ui: &MainWindow, service: &Service, messages: &Messages) -> Result<(), String> {
     ui.set_messages(ModelRc::from(messages.clone()));
-    refresh_users(ui, manager);
+    refresh_users(ui, service);
 
     let loc = Rc::new(RefCell::new(Localization::new("en")?));
     ui.set_t(localization::build_strings(&loc.borrow()));
@@ -70,14 +70,14 @@ fn initialize_ui(ui: &MainWindow, manager: &Manager, messages: &Messages) -> Res
 fn wire_callbacks(
     ui: &MainWindow,
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     messages: &Messages,
 ) {
     let loc = Rc::new(RefCell::new(Localization::new("en").unwrap()));
 
-    auth::wire_auth(ui, repository, manager, messages, &loc);
-    session::wire_session(ui, repository, manager, messages, &loc);
-    chat::wire_chat(ui, repository, manager, messages, &loc);
+    auth::wire_auth(ui, repository, service, messages, &loc);
+    session::wire_session(ui, repository, service, messages, &loc);
+    chat::wire_chat(ui, repository, service, messages, &loc);
     clipboard::wire_clipboard(ui, &loc);
     wire_language(ui, &loc);
 }
@@ -152,18 +152,18 @@ fn wire_language(ui: &MainWindow, loc: &Localizer) {
 // Data Retrieval & Transformation
 
 /// Gets the session names of the currently logged-in user
-fn get_session_names(manager: &UserManager) -> Vec<SharedString> {
-    manager
+fn get_session_names(service: &UserService) -> Vec<SharedString> {
+    service
         .get_current_user()
-        .map(|user| user.session_manager.get_session_names())
+        .map(|user| user.session_service.get_session_names())
         .map(|names| names.into_iter().map(SharedString::from).collect())
         .unwrap_or_default()
 }
 
 /// Gets the decrypted transcript of the current session as chat lines
-fn get_chat_history(manager: &UserManager, repository: &Repository) -> Vec<ChatLine> {
-    if let Some(user) = manager.get_current_user() {
-        message_manager::get_session_history(&repository.db_handle, user)
+fn get_chat_history(service: &UserService, repository: &Repository) -> Vec<ChatLine> {
+    if let Some(user) = service.get_current_user() {
+        message_service::get_session_history(&repository.db_handle, user)
             .map(|items| {
                 items
                     .into_iter()
@@ -190,10 +190,10 @@ fn refresh_messages(ui: &MainWindow, messages: &Messages, lines: Vec<ChatLine>) 
 }
 
 /// Refreshes the list of existing usernames shown on the login screen
-fn refresh_users(ui: &MainWindow, manager: &Manager) {
+fn refresh_users(ui: &MainWindow, service: &Service) {
     let users = {
-        let mgr = manager.borrow();
-        mgr.get_usernames()
+        let srv = service.borrow();
+        srv.get_usernames()
             .into_iter()
             .map(SharedString::from)
             .collect::<Vec<_>>()

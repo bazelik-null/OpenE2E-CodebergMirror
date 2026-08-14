@@ -132,31 +132,30 @@ Both binaries include all runtime dependencies in their `lib/` directories.
 
 # Architecture
 
-OpenE2E follows a **separation of concerns** design with a clear backend/frontend split and an object/manager pattern.
+OpenE2E follows a separation-of-concerns design with a clear object/service split inside the backend, and a frontend/backend boundary.
 
 ### Project Structure
 
 ```
 src/
-├── backend/                   # Core logic
-│   ├── managers/              # Managers handle operations on objects
-│   │   ├── user_manager.rs    # User account creation, authentication
-│   │   ├── session_manager.rs # Session creation, key exchange, state
-│   │   ├── storage_manager.rs # Database operations
-│   │   └── mod.rs
-│   └── objects/               # Data models
-│       ├── user.rs            # User account data
-│       ├── session.rs         # Session state, keys, crypto
-│       ├── message.rs         # Message data structures
-│       └── mod.rs
+├── backend/                    # Core logic
+│   ├── objects/                # Data models
+│   │   ├── user.rs             # User account data
+│   │   ├── session.rs          # Session state, keys, crypto
+│   │   └── message.rs          # Message data structures
+│   └── services/               # Services handle operations on objects
+│       ├── repository.rs       # Container for storage service
+│       ├── storage_service.rs  # Database operations
+│       ├── user_service.rs     # User workflows (create/auth/etc.)
+│       ├── session_service.rs  # Session workflows (init/handshake/etc.)
+│       └── message_service.rs  # Message workflows (encrypt/save/etc.)
 │
 ├── frontend/                  # UI and user interaction
 │   ├── cli/                   # Command-line interface
 │   ├── gui/                   # Graphical interface
 │   │   └── slint/             # Slint UI layout
-│   ├── fluent_manager.rs      # Localization system
-│   ├── logger.rs              # Logging
-│   └── mod.rs
+│   ├── fluent_service.rs      # Localization system
+│   └── logger.rs              # Logging
 │
 ├── error_mapper.rs            # Error conversion to string
 ├── main.rs                    # Entry point
@@ -165,12 +164,11 @@ src/
 
 ### Design Pattern
 
-**Backend (Objects + Managers):**
+**Backend (Objects + Services):**
 
-- **Objects** (`user.rs`, `session.rs`, `message.rs`) represent data instances
-- **Managers** (`user_manager.rs`, `session_manager.rs`, `storage_manager.rs`) handle all operations on objects
-- Managers interact with storage and perform encryption/decryption logic
-- Clean separation ensures backend logic is independent of UI
+- **Objects** (`objects/user.rs`, `objects/session.rs`, `objects/message.rs`) represent the core data types and state used across the system.
+- **Services** (`services/*_service.rs`) implement the backend workflows that operate on those objects.
+  - `repository.rs` owns and manages the storage worker lifecycle (start/autosave/shutdown) and exposes a WorkerHandle.
 
 **Frontend (CLI + GUI):**
 
@@ -181,9 +179,10 @@ src/
 
 ### Key Design Benefits
 
-- **Modularity** - Backend can be used by CLI, GUI, or other frontends without changes
-- **Maintainability** - Core logic is isolated from UI code
-- **Localization** - Text strings are centralized in `locales/` directory
+- **Modularity**: Backend workflow logic lives in `services/`, and frontend can change without touching core operations.
+- **Maintainability**: Object types are centralized in `objects/`, while operations on them are centralized in `services/`.
+- **Localization**: Text strings are centralized in `locales/` directory
+- **Reuse across frontends**: CLI and GUI can use the same backend services for consistent behavior.
 
 # Data Protection
 

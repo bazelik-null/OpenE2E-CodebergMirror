@@ -10,7 +10,7 @@
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::{
-    ChatLine, Localizer, MainWindow, Manager, Messages, RepositoryCell, fail, fail_key,
+    ChatLine, Localizer, MainWindow, Service, Messages, RepositoryCell, fail, fail_key,
     get_chat_history, get_session_names, refresh_messages, status,
 };
 use crate::backend::objects::session::SessionInstance;
@@ -21,14 +21,14 @@ type SessionInitResult = Result<(Option<String>, Vec<SharedString>, Vec<ChatLine
 pub(super) fn wire_session(
     ui: &MainWindow,
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     messages: &Messages,
     loc: &Localizer,
 ) {
-    wire_select_session(ui, repository, manager, messages, loc);
-    wire_generate_keys(ui, manager, loc);
-    wire_create_session(ui, repository, manager, messages, loc);
-    wire_delete_session(ui, manager, messages, loc);
+    wire_select_session(ui, repository, service, messages, loc);
+    wire_generate_keys(ui, service, loc);
+    wire_create_session(ui, repository, service, messages, loc);
+    wire_delete_session(ui, service, messages, loc);
 }
 
 // Select Session
@@ -36,12 +36,12 @@ pub(super) fn wire_session(
 fn wire_select_session(
     ui: &MainWindow,
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     messages: &Messages,
     loc: &Localizer,
 ) {
     let ui_weak = ui.as_weak();
-    let manager = manager.clone();
+    let service = service.clone();
     let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
@@ -49,12 +49,12 @@ fn wire_select_session(
     ui.on_select_session(move |name| {
         let ui = ui_weak.unwrap();
         let result = {
-            let mut mgr = manager.borrow_mut();
+            let mut srv = service.borrow_mut();
             let repo = repository.borrow();
-            mgr.get_current_user_mut()
+            srv.get_current_user_mut()
                 .ok_or_else(|| "No user selected".to_string())
-                .and_then(|user| user.session_manager.select_session(name.as_str()))
-                .map(|()| get_chat_history(&mgr, &repo))
+                .and_then(|user| user.session_service.select_session(name.as_str()))
+                .map(|()| get_chat_history(&srv, &repo))
         };
 
         match result {
@@ -70,16 +70,16 @@ fn wire_select_session(
 
 // Generate Keys
 
-fn wire_generate_keys(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
+fn wire_generate_keys(ui: &MainWindow, service: &Service, loc: &Localizer) {
     let ui_weak = ui.as_weak();
-    let manager = manager.clone();
+    let service = service.clone();
     let loc = loc.clone();
 
     ui.on_session_gen_keys(move || {
         let ui = ui_weak.unwrap();
         let result = {
-            let mut mgr = manager.borrow_mut();
-            mgr.get_current_user_mut()
+            let mut srv = service.borrow_mut();
+            srv.get_current_user_mut()
                 .ok_or_else(|| "No user selected".to_string())
                 .and_then(|user| SessionInstance::generate_keys(&mut user.account))
         };
@@ -99,12 +99,12 @@ fn wire_generate_keys(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
 fn wire_create_session(
     ui: &MainWindow,
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     messages: &Messages,
     loc: &Localizer,
 ) {
     let ui_weak = ui.as_weak();
-    let manager = manager.clone();
+    let service = service.clone();
     let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
@@ -119,7 +119,7 @@ fn wire_create_session(
 
         let result = create_session_internal(
             &repository,
-            &manager,
+            &service,
             name.as_str(),
             is_inbound,
             peer_keys.as_str(),
@@ -163,46 +163,46 @@ fn validate_session_inputs(
 
 fn create_session_internal(
     repository: &RepositoryCell,
-    manager: &Manager,
+    service: &Service,
     name: &str,
     is_inbound: bool,
     peer_keys: &str,
     first_msg: &str,
 ) -> SessionInitResult {
-    let mut mgr = manager.borrow_mut();
+    let mut srv = service.borrow_mut();
     let repo = repository.borrow();
 
     let init_msg = (|| -> Result<Option<String>, String> {
-        let user = mgr
+        let user = srv
             .get_current_user_mut()
             .ok_or_else(|| "No user selected".to_string())?;
 
         if is_inbound {
-            user.session_manager.establish_in_session(
+            user.session_service.establish_in_session(
                 &mut user.account,
                 name,
                 peer_keys,
                 first_msg,
             )?;
-            user.session_manager.select_session(name)?;
+            user.session_service.select_session(name)?;
             Ok(None)
         } else {
-            user.session_manager
+            user.session_service
                 .establish_out_session(&mut user.account, name, peer_keys)?;
-            user.session_manager.select_session(name)?;
+            user.session_service.select_session(name)?;
             // Generate pre-key message for peer to open inbound session
-            Ok(Some(user.session_manager.encrypt("")?))
+            Ok(Some(user.session_service.encrypt("")?))
         }
     })()?;
 
-    if let Err(e) = mgr.autosave(&repo.db_handle) {
+    if let Err(e) = srv.autosave(&repo.db_handle) {
         log::error!("Autosave after session creation failed: {}", e);
     }
 
     Ok((
         init_msg,
-        get_session_names(&mgr),
-        get_chat_history(&mgr, &repo),
+        get_session_names(&srv),
+        get_chat_history(&srv, &repo),
     ))
 }
 
@@ -234,9 +234,9 @@ fn handle_session_created(
 
 // Delete Session
 
-fn wire_delete_session(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+fn wire_delete_session(ui: &MainWindow, service: &Service, messages: &Messages, loc: &Localizer) {
     let ui_weak = ui.as_weak();
-    let manager = manager.clone();
+    let service = service.clone();
     let messages = messages.clone();
     let loc = loc.clone();
 
@@ -250,7 +250,7 @@ fn wire_delete_session(ui: &MainWindow, manager: &Manager, messages: &Messages, 
             return;
         }
 
-        match perform_delete_session(&manager, name.as_str()) {
+        match perform_delete_session(&service, name.as_str()) {
             Ok(sessions) => {
                 ui.set_sessions(ModelRc::new(VecModel::from(sessions)));
                 ui.set_current_session(SharedString::new());
@@ -264,10 +264,10 @@ fn wire_delete_session(ui: &MainWindow, manager: &Manager, messages: &Messages, 
     });
 }
 
-fn perform_delete_session(manager: &Manager, name: &str) -> Result<Vec<SharedString>, String> {
-    let mut mgr = manager.borrow_mut();
-    let user = mgr.get_current_user_mut().ok_or("User not found")?;
+fn perform_delete_session(service: &Service, name: &str) -> Result<Vec<SharedString>, String> {
+    let mut srv = service.borrow_mut();
+    let user = srv.get_current_user_mut().ok_or("User not found")?;
 
-    user.session_manager.delete_session(name);
-    Ok(get_session_names(&mgr))
+    user.session_service.delete_session(name);
+    Ok(get_session_names(&srv))
 }

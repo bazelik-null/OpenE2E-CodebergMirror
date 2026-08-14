@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-pub mod message_manager;
+pub mod message_service;
 pub mod repository;
-pub mod session_manager;
-pub mod storage_manager;
-pub mod user_manager;
+pub mod session_service;
+pub mod storage_service;
+pub mod user_service;

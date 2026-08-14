@@ -7,22 +7,22 @@
  * (at your option) any later version.
  */
 
-use crate::backend::managers::storage_manager::WorkerHandle;
+use crate::backend::services::storage_service::WorkerHandle;
 use crate::backend::objects::session::SessionInstance;
 use vodozemac::olm::Account;
 
-pub struct SessionManager {
+pub struct SessionService {
     sessions: Vec<SessionInstance>,
     current_session_name: Option<String>,
 }
 
-impl Default for SessionManager {
+impl Default for SessionService {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SessionManager {
+impl SessionService {
     pub fn new() -> Self {
         Self {
             sessions: Vec::new(),
@@ -32,7 +32,7 @@ impl SessionManager {
 
     // Session Management
 
-    /// Creates an outbound session and adds it to the manager
+    /// Creates an outbound session and adds it to the service
     pub fn establish_out_session(
         &mut self,
         account: &mut Account,
@@ -43,7 +43,7 @@ impl SessionManager {
         self.add_session(session)
     }
 
-    /// Creates an inbound session and adds it to the manager
+    /// Creates an inbound session and adds it to the service
     pub fn establish_in_session(
         &mut self,
         account: &mut Account,
@@ -56,7 +56,7 @@ impl SessionManager {
         self.add_session(session)
     }
 
-    /// Adds a session instance to the manager
+    /// Adds a session instance to the service
     pub fn add_session(&mut self, session: SessionInstance) -> Result<(), String> {
         if self.session_exists(&session.name) {
             return Err(format!("Session '{}' already exists", session.name));
@@ -67,14 +67,14 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Deletes session from manager and DB
+    /// Deletes session from service and DB
     pub fn delete_session_full(
         &mut self,
         db_handle: &WorkerHandle,
         username: &str,
         name: &str,
     ) -> Result<(), String> {
-        // Delete session from manager
+        // Delete session from service
         self.delete_session(name);
 
         let db = db_handle.worker();
@@ -89,7 +89,7 @@ impl SessionManager {
         db.delete_session(name, username)
     }
 
-    /// Deletes session only from manager
+    /// Deletes session only from service
     pub fn delete_session(&mut self, name: &str) {
         if self.is_current_session(name) {
             self.current_session_name = None;
@@ -195,5 +195,5 @@ impl SessionManager {
 }
 
 #[cfg(test)]
-#[path = "../../tests/session_manager.rs"]
+#[path = "../../tests/session_service.rs"]
 mod tests;

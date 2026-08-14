@@ -7,7 +7,7 @@
  * (at your option) any later version.
  */
 
-use crate::backend::managers::storage_manager::WorkerHandle;
+use crate::backend::services::storage_service::WorkerHandle;
 use crate::backend::objects::user::{SerializedUserTurple, User};
 use crate::error_mapper::MapErrorToString;
 
@@ -43,14 +43,14 @@ struct UserDataBlob {
     account_data: String,
 }
 
-// UserManager
+// UserService
 
-pub struct UserManager {
+pub struct UserService {
     users: Vec<SerializedUser>,
     current_user: Option<User>,
 }
 
-impl UserManager {
+impl UserService {
     pub fn new(db_handle: &WorkerHandle) -> Result<Self, String> {
         let users = Self::load_from_db(db_handle)?;
 
@@ -268,5 +268,5 @@ impl UserManager {
 }
 
 #[cfg(test)]
-#[path = "../../tests/user_manager.rs"]
+#[path = "../../tests/user_service.rs"]
 mod tests;

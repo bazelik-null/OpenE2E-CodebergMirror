@@ -7,17 +7,17 @@
  * (at your option) any later version.
  */
 
-/// Integration tests for DatabaseManager.
+/// Integration tests for DatabaseService.
 ///
 /// Each test opens its own temporary database directory, so they are isolated and safe to run in parallel.
 /// These verify the basic CRUD paths and the user -> sessions / session -> messages indexes.
 use super::*;
 
-/// Opens a DatabaseManager on a fresh temporary directory. The TempDir must be kept alive for the test's duration (dropping it deletes the directory).
-fn temp_db() -> (tempfile::TempDir, DatabaseManager) {
+/// Opens a DatabaseService on a fresh temporary directory. The TempDir must be kept alive for the test's duration (dropping it deletes the directory).
+fn temp_db() -> (tempfile::TempDir, DatabaseService) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("db").to_str().unwrap().to_string();
-    let db = DatabaseManager::new(&path).unwrap();
+    let db = DatabaseService::new(&path).unwrap();
     (dir, db)
 }
 
