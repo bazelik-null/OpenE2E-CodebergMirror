@@ -10,8 +10,8 @@
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::{
-    ChatLine, Localizer, MainWindow, Manager, Messages, fail, fail_key, get_chat_history,
-    get_session_names, refresh_messages, status,
+    ChatLine, Localizer, MainWindow, Manager, Messages, RepositoryCell, fail, fail_key,
+    get_chat_history, get_session_names, refresh_messages, status,
 };
 use crate::backend::objects::session::SessionInstance;
 
@@ -20,21 +20,29 @@ type SessionInitResult = Result<(Option<String>, Vec<SharedString>, Vec<ChatLine
 
 pub(super) fn wire_session(
     ui: &MainWindow,
+    repository: &RepositoryCell,
     manager: &Manager,
     messages: &Messages,
     loc: &Localizer,
 ) {
-    wire_select_session(ui, manager, messages, loc);
+    wire_select_session(ui, repository, manager, messages, loc);
     wire_generate_keys(ui, manager, loc);
-    wire_create_session(ui, manager, messages, loc);
+    wire_create_session(ui, repository, manager, messages, loc);
     wire_delete_session(ui, manager, messages, loc);
 }
 
 // Select Session
 
-fn wire_select_session(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+fn wire_select_session(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let manager = manager.clone();
+    let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
 
@@ -42,10 +50,11 @@ fn wire_select_session(ui: &MainWindow, manager: &Manager, messages: &Messages, 
         let ui = ui_weak.unwrap();
         let result = {
             let mut mgr = manager.borrow_mut();
+            let repo = repository.borrow();
             mgr.get_current_user_mut()
                 .ok_or_else(|| "No user selected".to_string())
                 .and_then(|user| user.session_manager.select_session(name.as_str()))
-                .map(|()| get_chat_history(&mgr))
+                .map(|()| get_chat_history(&mgr, &repo))
         };
 
         match result {
@@ -87,9 +96,16 @@ fn wire_generate_keys(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
 
 // Create Session
 
-fn wire_create_session(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+fn wire_create_session(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let manager = manager.clone();
+    let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
 
@@ -102,6 +118,7 @@ fn wire_create_session(ui: &MainWindow, manager: &Manager, messages: &Messages, 
         }
 
         let result = create_session_internal(
+            &repository,
             &manager,
             name.as_str(),
             is_inbound,
@@ -145,6 +162,7 @@ fn validate_session_inputs(
 }
 
 fn create_session_internal(
+    repository: &RepositoryCell,
     manager: &Manager,
     name: &str,
     is_inbound: bool,
@@ -152,6 +170,7 @@ fn create_session_internal(
     first_msg: &str,
 ) -> SessionInitResult {
     let mut mgr = manager.borrow_mut();
+    let repo = repository.borrow();
 
     let init_msg = (|| -> Result<Option<String>, String> {
         let user = mgr
@@ -176,11 +195,15 @@ fn create_session_internal(
         }
     })()?;
 
-    if let Err(e) = mgr.autosave() {
+    if let Err(e) = mgr.autosave(&repo.db_handle) {
         log::error!("Autosave after session creation failed: {}", e);
     }
 
-    Ok((init_msg, get_session_names(&mgr), get_chat_history(&mgr)))
+    Ok((
+        init_msg,
+        get_session_names(&mgr),
+        get_chat_history(&mgr, &repo),
+    ))
 }
 
 fn handle_session_created(
@@ -218,26 +241,33 @@ fn wire_delete_session(ui: &MainWindow, manager: &Manager, messages: &Messages, 
     let loc = loc.clone();
 
     ui.on_delete_session(move |name| {
-        let ui = ui_weak.unwrap();
+        let ui = match ui_weak.upgrade() {
+            Some(ui) => ui,
+            None => return,
+        };
 
         if name.trim().is_empty() {
             return;
         }
 
-        let result = {
-            let mut mgr = manager.borrow_mut();
-            mgr.delete_session(name.as_str())
-                .map(|()| get_session_names(&mgr))
-        };
-
-        match result {
+        match perform_delete_session(&manager, name.as_str()) {
             Ok(sessions) => {
                 ui.set_sessions(ModelRc::new(VecModel::from(sessions)));
                 ui.set_current_session(SharedString::new());
                 refresh_messages(&ui, &messages, Vec::new());
                 status(&ui, &loc, "status-session-deleted");
             }
-            Err(e) => fail(&ui, &e),
+            Err(e) => {
+                log::error!("Failed to delete session: {}", e);
+            }
         }
     });
+}
+
+fn perform_delete_session(manager: &Manager, name: &str) -> Result<Vec<SharedString>, String> {
+    let mut mgr = manager.borrow_mut();
+    let user = mgr.get_current_user_mut().ok_or("User not found")?;
+
+    user.session_manager.delete_session(name);
+    Ok(get_session_names(&mgr))
 }

@@ -10,27 +10,43 @@
 use slint::{ComponentHandle, SharedString};
 
 use super::{
-    Localizer, MainWindow, Manager, Messages, fail, fail_key, get_chat_history, refresh_messages,
-    status,
+    ChatLine, Localizer, MainWindow, Manager, Messages, RepositoryCell, fail, fail_key,
+    get_chat_history, refresh_messages, status,
 };
 
-pub(super) fn wire_chat(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
-    wire_encrypt(ui, manager, messages, loc);
-    wire_decrypt(ui, manager, messages, loc);
-    wire_submit_input(ui, manager, messages, loc);
+use crate::backend::managers::message_manager;
+
+pub(super) fn wire_chat(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+    loc: &Localizer,
+) {
+    wire_encrypt(ui, repository, manager, messages, loc);
+    wire_decrypt(ui, repository, manager, messages, loc);
+    wire_submit_input(ui, repository, manager, messages, loc);
 }
 
 // Encrypt
 
-fn wire_encrypt(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+fn wire_encrypt(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let manager = manager.clone();
+    let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
 
     ui.on_do_encrypt(move |plaintext| {
         encrypt_op(
             &ui_weak.unwrap(),
+            &repository,
             &manager,
             &messages,
             &loc,
@@ -41,6 +57,7 @@ fn wire_encrypt(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &L
 
 fn encrypt_op(
     ui: &MainWindow,
+    repository: &RepositoryCell,
     manager: &Manager,
     messages: &Messages,
     loc: &Localizer,
@@ -50,17 +67,7 @@ fn encrypt_op(
         return;
     }
 
-    let result = {
-        let mut mgr = manager.borrow_mut();
-        mgr.encrypt(plaintext).map(|ciphertext| {
-            if let Err(e) = mgr.autosave() {
-                log::error!("Autosave after encrypt failed: {}", e);
-            }
-            (ciphertext, get_chat_history(&mgr))
-        })
-    };
-
-    match result {
+    match perform_encryption(repository, manager, plaintext) {
         Ok((ciphertext, lines)) => {
             ui.set_output_text(ciphertext.into());
             ui.set_message_input(SharedString::new());
@@ -71,17 +78,44 @@ fn encrypt_op(
     }
 }
 
+fn perform_encryption(
+    repository: &RepositoryCell,
+    manager: &Manager,
+    plaintext: &str,
+) -> Result<(String, Vec<ChatLine>), String> {
+    let mut mgr = manager.borrow_mut();
+    let repo = repository.borrow();
+
+    let user = mgr.get_current_user_mut().ok_or("User not found")?;
+
+    let ciphertext = message_manager::encrypt(&repo.db_handle, user, plaintext)?;
+
+    if let Err(e) = mgr.autosave(&repo.db_handle) {
+        log::error!("Autosave after encrypt failed: {}", e);
+    }
+
+    Ok((ciphertext, get_chat_history(&mgr, &repo)))
+}
+
 // Decrypt
 
-fn wire_decrypt(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+fn wire_decrypt(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let manager = manager.clone();
+    let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
 
     ui.on_do_decrypt(move |ciphertext| {
         decrypt_op(
             &ui_weak.unwrap(),
+            &repository,
             &manager,
             &messages,
             &loc,
@@ -92,6 +126,7 @@ fn wire_decrypt(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &L
 
 fn decrypt_op(
     ui: &MainWindow,
+    repository: &RepositoryCell,
     manager: &Manager,
     messages: &Messages,
     loc: &Localizer,
@@ -101,17 +136,7 @@ fn decrypt_op(
         return;
     }
 
-    let result = {
-        let mut mgr = manager.borrow_mut();
-        mgr.decrypt(ciphertext).map(|_plaintext| {
-            if let Err(e) = mgr.autosave() {
-                log::error!("Autosave after encrypt failed: {}", e);
-            }
-            get_chat_history(&mgr)
-        })
-    };
-
-    match result {
+    match perform_decryption(repository, manager, ciphertext) {
         Ok(lines) => {
             ui.set_message_input(SharedString::new());
             refresh_messages(ui, messages, lines);
@@ -121,11 +146,38 @@ fn decrypt_op(
     }
 }
 
+fn perform_decryption(
+    repository: &RepositoryCell,
+    manager: &Manager,
+    ciphertext: &str,
+) -> Result<Vec<ChatLine>, String> {
+    let mut mgr = manager.borrow_mut();
+    let repo = repository.borrow();
+
+    let user = mgr.get_current_user_mut().ok_or("User not found")?;
+
+    let _plaintext =
+        message_manager::decrypt(&repo.db_handle, user, ciphertext).map_err(|e| e.to_string())?;
+
+    if let Err(e) = mgr.autosave(&repo.db_handle) {
+        log::error!("Autosave after decrypt failed: {}", e);
+    }
+
+    Ok(get_chat_history(&mgr, &repo))
+}
+
 // Submit Input
 
-fn wire_submit_input(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+fn wire_submit_input(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let manager = manager.clone();
+    let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
 
@@ -138,9 +190,9 @@ fn wire_submit_input(ui: &MainWindow, manager: &Manager, messages: &Messages, lo
         }
 
         if looks_like_ciphertext(text.as_str()) {
-            decrypt_op(&ui, &manager, &messages, &loc, text.as_str());
+            decrypt_op(&ui, &repository, &manager, &messages, &loc, text.as_str());
         } else {
-            encrypt_op(&ui, &manager, &messages, &loc, text.as_str());
+            encrypt_op(&ui, &repository, &manager, &messages, &loc, text.as_str());
         }
     });
 }

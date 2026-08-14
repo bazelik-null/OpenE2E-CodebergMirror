@@ -10,15 +10,21 @@
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::{
-    Localizer, MainWindow, Manager, Messages, fail, fail_key, get_session_names, refresh_messages,
-    refresh_users, status,
+    Localizer, MainWindow, Manager, Messages, RepositoryCell, fail, fail_key, get_session_names,
+    refresh_messages, refresh_users, status,
 };
 
-pub(super) fn wire_auth(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+pub(super) fn wire_auth(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+    loc: &Localizer,
+) {
     wire_login(ui, manager, loc);
-    wire_create_user(ui, manager, loc);
-    wire_logout(ui, manager, messages, loc);
-    wire_delete_user(ui, manager, loc);
+    wire_create_user(ui, repository, manager, loc);
+    wire_logout(ui, repository, manager, messages, loc);
+    wire_delete_user(ui, repository, manager, loc);
 }
 
 // Login
@@ -68,9 +74,15 @@ fn handle_login_success(ui: &MainWindow, name: &SharedString, sessions: Vec<Shar
 
 // Create User
 
-fn wire_create_user(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
+fn wire_create_user(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let manager = manager.clone();
+    let repository = repository.clone();
     let loc = loc.clone();
 
     ui.on_create_user(move |name, password| {
@@ -80,7 +92,7 @@ fn wire_create_user(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
             return;
         }
 
-        let result = create_user_internal(&manager, name.as_str(), password.as_str());
+        let result = create_user_internal(&repository, &manager, name.as_str(), password.as_str());
 
         match result {
             Ok(sessions) => {
@@ -94,31 +106,40 @@ fn wire_create_user(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
 }
 
 fn create_user_internal(
+    repository: &RepositoryCell,
     manager: &Manager,
     name: &str,
     password: &str,
 ) -> Result<Vec<SharedString>, String> {
     let mut mgr = manager.borrow_mut();
+    let repo = &repository.borrow();
 
     mgr.new_user(name, password)?;
     mgr.login(name, password)?;
-    mgr.autosave()?;
+    mgr.autosave(&repo.db_handle)?;
 
     Ok(get_session_names(&mgr))
 }
 
 // Logout
 
-fn wire_logout(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Localizer) {
+fn wire_logout(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let manager = manager.clone();
+    let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
 
     ui.on_logout(move || {
         let ui = ui_weak.unwrap();
 
-        perform_logout(&manager);
+        perform_logout(&repository, &manager);
         clear_ui_state(&ui, &messages);
         refresh_users(&ui, &manager);
 
@@ -126,10 +147,13 @@ fn wire_logout(ui: &MainWindow, manager: &Manager, messages: &Messages, loc: &Lo
     });
 }
 
-fn perform_logout(manager: &Manager) {
+fn perform_logout(repository: &RepositoryCell, manager: &Manager) {
     let mut mgr = manager.borrow_mut();
+    let repo = &repository.borrow();
+
     mgr.logout();
-    if let Err(e) = mgr.autosave() {
+
+    if let Err(e) = mgr.autosave(&repo.db_handle) {
         log::error!("Autosave on logout failed: {}", e);
     }
 }
@@ -149,9 +173,15 @@ fn clear_ui_state(ui: &MainWindow, messages: &Messages) {
 
 // Delete User
 
-fn wire_delete_user(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
+fn wire_delete_user(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let manager = manager.clone();
+    let repository = repository.clone();
     let loc = loc.clone();
 
     ui.on_delete_user(move |name| {
@@ -163,7 +193,9 @@ fn wire_delete_user(ui: &MainWindow, manager: &Manager, loc: &Localizer) {
 
         let result = {
             let mut mgr = manager.borrow_mut();
-            mgr.delete_user(name.as_str())
+            let repo = repository.borrow();
+
+            mgr.delete_user(&repo.db_handle, name.as_str())
         };
 
         match result {

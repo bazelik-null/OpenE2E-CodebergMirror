@@ -7,14 +7,7 @@
  * (at your option) any later version.
  */
 
-use colorize::AnsiColor;
-use rand::RngExt;
-use std::time::Duration;
-
-use crate::backend::managers::storage_manager::{
-    BackgroundWorker, WorkerHandle, get_storage_filepath,
-};
-use crate::backend::objects::message::Message;
+use crate::backend::managers::storage_manager::WorkerHandle;
 use crate::backend::objects::user::{SerializedUserTurple, User};
 use crate::error_mapper::MapErrorToString;
 
@@ -51,31 +44,19 @@ struct UserDataBlob {
 }
 
 // UserManager
-const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(60);
 
 pub struct UserManager {
     users: Vec<SerializedUser>,
     current_user: Option<User>,
-    pub db_handle: WorkerHandle,
 }
 
 impl UserManager {
-    pub fn new() -> Result<Self, String> {
-        let storage_path = get_storage_filepath();
-        let storage_path = storage_path.to_string_lossy().into_owned();
-        Self::with_storage_path(&storage_path)
-    }
-
-    pub fn with_storage_path(db_path: &str) -> Result<Self, String> {
-        let worker = BackgroundWorker::new(AUTOSAVE_INTERVAL, db_path)?;
-        let handle = worker.start();
-
-        let users = Self::load_from_db(&handle)?;
+    pub fn new(db_handle: &WorkerHandle) -> Result<Self, String> {
+        let users = Self::load_from_db(db_handle)?;
 
         Ok(Self {
             users,
             current_user: None,
-            db_handle: handle,
         })
     }
 
@@ -97,15 +78,14 @@ impl UserManager {
     }
 
     /// Deletes a user by name
-    pub fn delete_user(&mut self, name: &str) -> Result<(), String> {
+    pub fn delete_user(&mut self, db_handle: &WorkerHandle, name: &str) -> Result<(), String> {
         if self.is_current_user(name) {
             self.current_user = None;
         }
 
         self.users.retain(|user| user.name != name);
 
-        let db = self.db_handle.worker();
-
+        let db = db_handle.worker();
         db.delete_user(name)?;
 
         Ok(())
@@ -119,167 +99,6 @@ impl UserManager {
     /// Retrieves all usernames
     pub fn get_usernames(&self) -> Vec<&str> {
         self.users.iter().map(|user| user.name.as_str()).collect()
-    }
-
-    // Messaging
-
-    /// Decrypts ciphertext using the active session
-    pub fn encrypt(&mut self, plaintext: &str) -> Result<String, String> {
-        let user = self
-            .get_current_user_mut()
-            .ok_or_else(|| "No user selected".to_string())?;
-        let session_name = user
-            .session_manager
-            .get_current_session()
-            .ok_or_else(|| "No session selected".to_string())?
-            .name
-            .clone();
-
-        // Encrypt message for network with OLM
-        let net_encrypted = user.encrypt(plaintext)?;
-
-        // Encrypt message for DB with AES-256-GCM
-        let db_encrypted = Message::encrypt(&user.encryption_key, &user.name, plaintext)?;
-
-        // Generate random message ID
-        let mut rng = rand::rng();
-        let message_id = rng.random::<u32>().to_string();
-
-        // Save encrypted message to database
-        let db = self.db_handle.worker();
-        db.save_message(&message_id, &session_name, &db_encrypted)?;
-
-        Ok(net_encrypted)
-    }
-
-    /// Decrypts ciphertext using the active session and saves to database
-    pub fn decrypt(&mut self, ciphertext_b64: &str) -> Result<String, String> {
-        let user = self
-            .get_current_user_mut()
-            .ok_or_else(|| "No user selected".to_string())?;
-        let session_name = user
-            .session_manager
-            .get_current_session()
-            .ok_or_else(|| "No session selected".to_string())?
-            .name
-            .clone();
-
-        // Decrypt message from network with OLM
-        let net_decrypted = user.decrypt(ciphertext_b64)?;
-
-        // Encrypt decrypted message for DB with AES-256-GCM
-        let db_encrypted = Message::encrypt(&user.encryption_key, &session_name, &net_decrypted)?;
-
-        // Generate random message ID
-        let mut rng = rand::rng();
-        let message_id = rng.random::<u32>().to_string();
-
-        // Save encrypted message to database
-        let db = self.db_handle.worker();
-        db.save_message(&message_id, &session_name, &db_encrypted)?;
-
-        Ok(net_decrypted)
-    }
-
-    /// Retrieves all messages from the current session, sorts by timestamp, and displays them
-    pub fn get_session_messages(&self) -> Result<String, String> {
-        // Get session name and encryption key
-        let (session_name, encryption_key) = {
-            let user = self
-                .get_current_user()
-                .ok_or_else(|| "No user selected".to_string())?;
-            let session_name = user
-                .session_manager
-                .get_current_session()
-                .ok_or_else(|| "No session selected".to_string())?
-                .name
-                .clone();
-            let encryption_key = user.encryption_key;
-            (session_name, encryption_key)
-        };
-
-        // Retrieve messages from DB
-        let db = self.db_handle.worker();
-        let encrypted_messages = db.get_messages_by_session(&session_name)?;
-
-        // Decrypt all messages
-        let mut decrypted_messages = Vec::new();
-        for encrypted_bytes in encrypted_messages {
-            match Message::decrypt(&encryption_key, &encrypted_bytes) {
-                Ok(msg) => {
-                    decrypted_messages.push(msg);
-                }
-                Err(e) => {
-                    eprintln!("Failed to decrypt message: {}", e);
-                }
-            }
-        }
-
-        // Sort messages by timestamp in ascending order
-        decrypted_messages.sort_by_key(|msg| msg.timestamp);
-
-        // Format each message
-        let formatted_messages: Vec<String> = decrypted_messages
-            .iter()
-            .map(|msg| {
-                // Convert Unix timestamp to readable format
-                let datetime = chrono::DateTime::<chrono::Utc>::from(
-                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(msg.timestamp),
-                );
-                let time_str = datetime.format("%Y-%m-%d %H:%M:%S").to_string();
-
-                // Get plaintext from decrypted data
-                let plaintext = String::from_utf8_lossy(&msg.data).to_string();
-
-                format!(
-                    "{}: {}: {}",
-                    time_str.b_grey(),
-                    msg.sender.clone().cyan(),
-                    plaintext.grey()
-                )
-            })
-            .collect();
-
-        Ok(formatted_messages.join("\n"))
-    }
-
-    /// Returns the current session's messages as (timestamp, sender, plaintext),
-    /// sorted ascending by time. Structured counterpart to `get_session_messages`.
-    pub fn get_session_history(&self) -> Result<Vec<(u64, String, String)>, String> {
-        let (session_name, encryption_key) = {
-            let user = self
-                .get_current_user()
-                .ok_or_else(|| "No user selected".to_string())?;
-            let session_name = user
-                .session_manager
-                .get_current_session()
-                .ok_or_else(|| "No session selected".to_string())?
-                .name
-                .clone();
-            (session_name, user.encryption_key)
-        };
-
-        let db = self.db_handle.worker();
-        let encrypted_messages = db.get_messages_by_session(&session_name)?;
-
-        let mut messages = Vec::new();
-        for encrypted_bytes in encrypted_messages {
-            if let Ok(msg) = Message::decrypt(&encryption_key, &encrypted_bytes) {
-                messages.push(msg);
-            }
-        }
-        messages.sort_by_key(|msg| msg.timestamp);
-
-        Ok(messages
-            .into_iter()
-            .map(|msg| {
-                (
-                    msg.timestamp,
-                    msg.sender,
-                    String::from_utf8_lossy(&msg.data).to_string(),
-                )
-            })
-            .collect())
     }
 
     // Authentication
@@ -332,35 +151,12 @@ impl UserManager {
         self.current_user.as_mut()
     }
 
-    // Sessions
-
-    pub fn delete_session(&mut self, session_id: &str) -> Result<(), String> {
-        let user = self
-            .get_current_user_mut()
-            .ok_or_else(|| "No user selected".to_string())?;
-        let username = user.name.clone();
-
-        // Delete session from manager
-        user.session_manager.delete_session(session_id);
-
-        let db = self.db_handle.worker();
-
-        // Delete all messages
-        let message_ids = db.get_message_ids_by_session(session_id)?;
-        for message_id in message_ids {
-            db.delete_message(&message_id, session_id)?;
-        }
-
-        // Delete session from DB
-        db.delete_session(session_id, &username)
-    }
-
     // Persistence
 
     /// Syncs the current user to storage and saves all users to disk
-    pub fn autosave(&mut self) -> Result<(), String> {
+    pub fn autosave(&mut self, db_handle: &WorkerHandle) -> Result<(), String> {
         self.sync_current_user_to_storage()?;
-        self.save_to_db()?;
+        self.save_to_db(db_handle)?;
 
         Ok(())
     }
@@ -381,8 +177,8 @@ impl UserManager {
     }
 
     /// Saves all users to the database
-    fn save_to_db(&self) -> Result<(), String> {
-        let db = self.db_handle.worker();
+    fn save_to_db(&self, db_handle: &WorkerHandle) -> Result<(), String> {
+        let db = db_handle.worker();
 
         // Save all users to database
         for user in &self.users {
@@ -468,12 +264,6 @@ impl UserManager {
         }
 
         Ok(())
-    }
-
-    /// Ensures all data is saved and shut down autosave worker
-    pub fn shutdown(mut self) -> Result<(), String> {
-        self.autosave()?;
-        self.db_handle.graceful_shutdown()
     }
 }
 

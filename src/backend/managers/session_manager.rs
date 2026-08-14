@@ -7,6 +7,7 @@
  * (at your option) any later version.
  */
 
+use crate::backend::managers::storage_manager::WorkerHandle;
 use crate::backend::objects::session::SessionInstance;
 use vodozemac::olm::Account;
 
@@ -66,7 +67,29 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Deletes a session by name
+    /// Deletes session from manager and DB
+    pub fn delete_session_full(
+        &mut self,
+        db_handle: &WorkerHandle,
+        username: &str,
+        name: &str,
+    ) -> Result<(), String> {
+        // Delete session from manager
+        self.delete_session(name);
+
+        let db = db_handle.worker();
+
+        // Delete all messages
+        let message_ids = db.get_message_ids_by_session(name)?;
+        for message_id in message_ids {
+            db.delete_message(&message_id, name)?;
+        }
+
+        // Delete session from DB
+        db.delete_session(name, username)
+    }
+
+    /// Deletes session only from manager
     pub fn delete_session(&mut self, name: &str) {
         if self.is_current_session(name) {
             self.current_session_name = None;

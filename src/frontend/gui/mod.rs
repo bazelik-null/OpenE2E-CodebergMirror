@@ -12,6 +12,8 @@ use std::rc::Rc;
 
 use slint::{ModelRc, SharedString, VecModel};
 
+use crate::backend::managers::message_manager;
+use crate::backend::managers::repository::Repository;
 use crate::backend::managers::user_manager::UserManager;
 use crate::frontend::fluent_manager::Localization;
 
@@ -25,6 +27,7 @@ mod session;
 
 // Type aliases for wrappers
 type Manager = Rc<RefCell<UserManager>>;
+type RepositoryCell = Rc<RefCell<Repository>>;
 type Messages = Rc<VecModel<ChatLine>>;
 type Localizer = Rc<RefCell<Localization>>;
 
@@ -35,15 +38,19 @@ pub fn run() -> Result<(), String> {
     force_software_renderer();
 
     let ui = MainWindow::new().map_err(|e| e.to_string())?;
-    let manager = Rc::new(RefCell::new(UserManager::new()?));
+
+    let repository = Rc::new(RefCell::new(Repository::new()?));
+    let manager = Rc::new(RefCell::new(UserManager::new(
+        &repository.borrow().db_handle,
+    )?));
     let messages = Rc::new(VecModel::default());
 
     initialize_ui(&ui, &manager, &messages)?;
-    wire_callbacks(&ui, &manager, &messages);
+    wire_callbacks(&ui, &repository, &manager, &messages);
 
     ui.run().map_err(|e| e.to_string())?;
 
-    cleanup(ui, manager);
+    cleanup(ui, repository);
     Ok(())
 }
 
@@ -60,12 +67,17 @@ fn initialize_ui(ui: &MainWindow, manager: &Manager, messages: &Messages) -> Res
     Ok(())
 }
 
-fn wire_callbacks(ui: &MainWindow, manager: &Manager, messages: &Messages) {
+fn wire_callbacks(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    manager: &Manager,
+    messages: &Messages,
+) {
     let loc = Rc::new(RefCell::new(Localization::new("en").unwrap()));
 
-    auth::wire_auth(ui, manager, messages, &loc);
-    session::wire_session(ui, manager, messages, &loc);
-    chat::wire_chat(ui, manager, messages, &loc);
+    auth::wire_auth(ui, repository, manager, messages, &loc);
+    session::wire_session(ui, repository, manager, messages, &loc);
+    chat::wire_chat(ui, repository, manager, messages, &loc);
     clipboard::wire_clipboard(ui, &loc);
     wire_language(ui, &loc);
 }
@@ -73,19 +85,17 @@ fn wire_callbacks(ui: &MainWindow, manager: &Manager, messages: &Messages) {
 // Shutdown & Cleanup
 
 /// Flush state and stop the autosave worker cleanly
-fn cleanup(ui: MainWindow, manager: Manager) {
+fn cleanup(ui: MainWindow, repository: RepositoryCell) {
     drop(ui);
 
-    match Rc::try_unwrap(manager) {
+    match Rc::try_unwrap(repository) {
         Ok(cell) => {
             if let Err(e) = cell.into_inner().shutdown() {
                 log::error!("Shutdown failed: {}", e);
             }
         }
-        Err(rc) => {
-            if let Err(e) = rc.borrow_mut().autosave() {
-                log::error!("Final autosave failed: {}", e);
-            }
+        Err(_) => {
+            log::error!("Shutdown failed: Couldnt get repository from Rc");
         }
     }
 }
@@ -151,20 +161,23 @@ fn get_session_names(manager: &UserManager) -> Vec<SharedString> {
 }
 
 /// Gets the decrypted transcript of the current session as chat lines
-fn get_chat_history(manager: &UserManager) -> Vec<ChatLine> {
-    manager
-        .get_session_history()
-        .map(|items| {
-            items
-                .into_iter()
-                .map(|(timestamp, sender, text)| ChatLine {
-                    sender: sender.into(),
-                    text: text.into(),
-                    time: format_timestamp(timestamp),
-                })
-                .collect()
-        })
-        .unwrap_or_default()
+fn get_chat_history(manager: &UserManager, repository: &Repository) -> Vec<ChatLine> {
+    if let Some(user) = manager.get_current_user() {
+        message_manager::get_session_history(&repository.db_handle, user)
+            .map(|items| {
+                items
+                    .into_iter()
+                    .map(|(timestamp, sender, text)| ChatLine {
+                        sender: sender.into(),
+                        text: text.into(),
+                        time: format_timestamp(timestamp),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        vec![]
+    }
 }
 
 // UI Updates
