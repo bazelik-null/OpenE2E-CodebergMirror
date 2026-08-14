@@ -77,11 +77,11 @@ jobs:
       - run:
           name: Create CLI tarball
           command: |
-            cp -r result-cli OpenE2E-CLI-nix
-            tar czf OpenE2E-CLI-nix-x86_64-linux.tar.gz OpenE2E-CLI-nix/
+            cp -r result-cli OpenE2E-CLI_NixOS
+            tar czf OpenE2E-CLI_NixOS.tar.gz OpenE2E-CLI_NixOS/
       - store_artifacts:
-          path: OpenE2E-CLI-nix-x86_64-linux.tar.gz
-          destination: OpenE2E-CLI-nix-x86_64-linux.tar.gz
+          path: OpenE2E-CLI_NixOS.tar.gz
+          destination: OpenE2E-CLI_NixOS.tar.gz
 
   build_nix_gui:
     docker:
@@ -96,11 +96,11 @@ jobs:
       - run:
           name: Create GUI tarball
           command: |
-            cp -r result-gui OpenE2E-GUI-nix
-            tar czf OpenE2E-GUI-nix-x86_64-linux.tar.gz OpenE2E-GUI-nix/
+            cp -r result-gui OpenE2E-GUI_NixOS
+            tar czf OpenE2E-GUI_NixOS.tar.gz OpenE2E-GUI_NixOS/
       - store_artifacts:
-          path: OpenE2E-GUI-nix-x86_64-linux.tar.gz
-          destination: OpenE2E-GUI-nix-x86_64-linux.tar.gz
+          path: OpenE2E-GUI_NixOS.tar.gz
+          destination: OpenE2E-GUI_NixOS.tar.gz
 
 workflows:
   build:
