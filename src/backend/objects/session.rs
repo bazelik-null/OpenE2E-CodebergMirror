@@ -104,7 +104,7 @@ impl SessionInstance {
         let (remote_identity_key, remote_one_time_key) =
             Self::parse_keys_bundle(remote_keys_bundle)?;
 
-        let session_config = SessionConfig::version_1();
+        let session_config = SessionConfig::version_2();
         let session = account
             .create_outbound_session(session_config, remote_identity_key, remote_one_time_key)
             .map_err_to_string()?;
@@ -127,7 +127,7 @@ impl SessionInstance {
         let (remote_identity_key, _) = Self::parse_keys_bundle(remote_keys_bundle)?;
         let pre_key_message = PreKeyMessage::from_bytes(first_message).map_err_to_string()?;
 
-        let session_config = SessionConfig::version_1();
+        let session_config = SessionConfig::version_2();
         let session_creation_result = account
             .create_inbound_session(session_config, remote_identity_key, &pre_key_message)
             .map_err_to_string()?;
