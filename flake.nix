@@ -93,7 +93,7 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            (rust-bin.nightly.latest.default.override {
+            (rust-bin.stable.latest.default.override {
               extensions = [ "rust-src" "rust-analyzer" "clippy" ];
             })
             pkg-config
