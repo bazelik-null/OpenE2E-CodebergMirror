@@ -215,6 +215,5 @@ fn looks_like_ciphertext(text: &str) -> bool {
     };
 
     // Then try parsing ciphertext from decoded bytes
-    PreKeyMessage::from_bytes(&decoded).is_ok()
-        || Message::from_bytes(&decoded).is_ok()
+    PreKeyMessage::from_bytes(&decoded).is_ok() || Message::from_bytes(&decoded).is_ok()
 }

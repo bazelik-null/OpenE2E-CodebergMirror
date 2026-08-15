@@ -29,7 +29,7 @@ pub(super) fn wire_session(
     wire_select_session(ui, repository, service, messages, loc);
     wire_generate_keys(ui, service, loc);
     wire_create_session(ui, repository, service, messages, loc);
-    wire_delete_session(ui, service, messages, loc);
+    wire_delete_session(ui, repository, service, messages, loc);
 }
 
 // Select Session
@@ -243,9 +243,16 @@ fn handle_session_created(
 
 // Delete Session
 
-fn wire_delete_session(ui: &MainWindow, service: &Service, messages: &Messages, loc: &Localizer) {
+fn wire_delete_session(
+    ui: &MainWindow,
+    repository: &RepositoryCell,
+    service: &Service,
+    messages: &Messages,
+    loc: &Localizer,
+) {
     let ui_weak = ui.as_weak();
     let service = service.clone();
+    let repository = repository.clone();
     let messages = messages.clone();
     let loc = loc.clone();
 
@@ -259,7 +266,7 @@ fn wire_delete_session(ui: &MainWindow, service: &Service, messages: &Messages, 
             return;
         }
 
-        match perform_delete_session(&service, name.as_str()) {
+        match perform_delete_session(&repository, &service, name.as_str()) {
             Ok(sessions) => {
                 ui.set_sessions(ModelRc::new(VecModel::from(sessions)));
                 ui.set_current_session(SharedString::new());
@@ -273,10 +280,20 @@ fn wire_delete_session(ui: &MainWindow, service: &Service, messages: &Messages, 
     });
 }
 
-fn perform_delete_session(service: &Service, name: &str) -> Result<Vec<SharedString>, String> {
+fn perform_delete_session(
+    repository: &RepositoryCell,
+    service: &Service,
+    name: &str,
+) -> Result<Vec<SharedString>, String> {
     let mut srv = service.borrow_mut();
+    let repo = repository.borrow();
     let user = srv.get_current_user_mut().ok_or("User not found")?;
+    let username = user.name.clone();
 
-    user.session_service.delete_session(name);
+    user.session_service
+        .delete_session_full(&repo.db_handle, &username, name)?;
+
+    srv.autosave(&repo.db_handle)?;
+
     Ok(get_session_names(&srv))
 }
