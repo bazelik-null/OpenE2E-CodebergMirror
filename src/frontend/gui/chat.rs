@@ -160,8 +160,8 @@ fn perform_decryption(
     let user = srv.get_current_user_mut().ok_or("User not found")?;
 
     let decoded = encoding::decode(ciphertext.as_bytes())?;
-    let _plaintext =
-        message_service::decrypt(&repo.db_handle, user, &decoded, None).map_err(|e| e.to_string())?;
+    let _plaintext = message_service::decrypt(&repo.db_handle, user, &decoded, None)
+        .map_err(|e| e.to_string())?;
 
     if let Err(e) = srv.autosave(&repo.db_handle) {
         log::error!("Autosave after decrypt failed: {}", e);
@@ -208,6 +208,13 @@ fn looks_like_ciphertext(text: &str) -> bool {
 
     let text = text.trim();
 
-    // Try parsing as OLM ciphertext
-    PreKeyMessage::from_base64(text).is_ok() || Message::from_base64(text).is_ok()
+    // First decode
+    let decoded = match encoding::decode(text.as_bytes()) {
+        Ok(b) => b,
+        Err(_) => return false,
+    };
+
+    // Then try parsing ciphertext from decoded bytes
+    PreKeyMessage::from_bytes(&decoded).is_ok()
+        || Message::from_bytes(&decoded).is_ok()
 }

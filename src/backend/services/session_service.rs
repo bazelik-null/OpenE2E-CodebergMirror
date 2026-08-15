@@ -37,7 +37,7 @@ impl SessionService {
         &mut self,
         account: &mut Account,
         name: &str,
-        remote_keys_bundle: &str,
+        remote_keys_bundle: &[u8],
     ) -> Result<(), String> {
         let session = SessionInstance::create_outbound(account, name, remote_keys_bundle)?;
         self.add_session(session)
@@ -48,7 +48,7 @@ impl SessionService {
         &mut self,
         account: &mut Account,
         name: &str,
-        remote_keys_bundle: &str,
+        remote_keys_bundle: &[u8],
         first_message: &[u8],
     ) -> Result<(), String> {
         let session =

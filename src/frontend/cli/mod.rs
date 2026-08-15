@@ -331,7 +331,7 @@ impl Application {
         // Encrypt text
         let encrypted =
             message_service::encrypt(&self.repository.db_handle, user, text.as_bytes(), None)?;
-        // Encode text to base 64
+        // Encode text
         let encoded = encoding::encode(&encrypted);
 
         println!("{}", encoded);
@@ -350,7 +350,7 @@ impl Application {
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        // Decode text from base 64
+        // Decode text
         let decoded = encoding::decode(text.as_bytes())?;
         // Decrypt text
         let decrypted = message_service::decrypt(&self.repository.db_handle, user, &decoded, None)?;
@@ -550,22 +550,23 @@ fn create_inbound_session(
 ) -> Result<(), String> {
     println!("{}", localization.get("generating-keys").grey());
     let our_keys = SessionInstance::generate_keys(&mut user.account)?;
+    let encoded_keys = encoding::encode(&our_keys);
     println!("{}", localization.get("share-keys").grey());
-    println!("{}", our_keys.bold());
+    println!("{}", encoded_keys.bold());
     println!();
 
     println!("{}", localization.get("paste-other-keys").grey());
     let remote_keys = prompt_input();
+    let decoded_keys = encoding::decode(remote_keys.as_bytes())?;
     println!();
 
     println!("{}", localization.get("paste-init-message").grey());
     let init_message = prompt_input();
-    // Decode init message from base 64
     let decoded = encoding::decode(init_message.as_bytes())?;
     println!();
 
     user.session_service
-        .establish_in_session(&mut user.account, name, &remote_keys, &decoded)?;
+        .establish_in_session(&mut user.account, name, &decoded_keys, &decoded)?;
 
     user.session_service.select_session(name)
 }
@@ -577,22 +578,23 @@ fn create_outbound_session(
 ) -> Result<(), String> {
     println!("{}", localization.get("generating-keys").grey());
     let our_keys = SessionInstance::generate_keys(&mut user.account)?;
+    let encoded_keys = encoding::encode(&our_keys);
     println!("{}", localization.get("share-keys").grey());
-    println!("{}", our_keys.bold());
+    println!("{}", encoded_keys.bold());
     println!();
 
     println!("{}", localization.get("paste-other-keys").grey());
     let remote_keys = prompt_input();
+    let decoded_keys = encoding::decode(remote_keys.as_bytes())?;
     println!();
 
     user.session_service
-        .establish_out_session(&mut user.account, name, &remote_keys)?;
+        .establish_out_session(&mut user.account, name, &decoded_keys)?;
     user.session_service.select_session(name)?;
 
     println!("{}", localization.get("session-established").green());
 
     let init_message = user.session_service.encrypt("".as_bytes())?;
-    // Encode init message to base 64
     let encoded = encoding::encode(&init_message);
     println!("{}", encoded.bold());
 

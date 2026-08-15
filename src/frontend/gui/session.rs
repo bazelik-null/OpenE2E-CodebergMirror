@@ -87,7 +87,8 @@ fn wire_generate_keys(ui: &MainWindow, service: &Service, loc: &Localizer) {
 
         match result {
             Ok(keys) => {
-                ui.set_my_keys(keys.into());
+                let encoded = encoding::encode(&keys);
+                ui.set_my_keys(encoded.into());
                 status(&ui, &loc, "status-keys-generated");
             }
             Err(e) => fail(&ui, &e),
@@ -179,18 +180,20 @@ fn create_session_internal(
             .ok_or_else(|| "No user selected".to_string())?;
 
         if is_inbound {
-            let decoded = encoding::decode(first_msg.as_bytes())?;
+            let decoded_msg = encoding::decode(first_msg.as_bytes())?;
+            let decoded_keys = encoding::decode(peer_keys.as_bytes())?;
             user.session_service.establish_in_session(
                 &mut user.account,
                 name,
-                peer_keys,
-                &decoded,
+                &decoded_keys,
+                &decoded_msg,
             )?;
             user.session_service.select_session(name)?;
             Ok(None)
         } else {
+            let decoded_keys = encoding::decode(peer_keys.as_bytes())?;
             user.session_service
-                .establish_out_session(&mut user.account, name, peer_keys)?;
+                .establish_out_session(&mut user.account, name, &decoded_keys)?;
             user.session_service.select_session(name)?;
 
             let init_message = user.session_service.encrypt("".as_bytes())?;

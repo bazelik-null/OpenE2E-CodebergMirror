@@ -33,12 +33,14 @@ fn established_pair() -> (SessionInstance, SessionInstance) {
 }
 
 #[test]
-fn generate_keys_returns_identity_and_one_time() {
-    // The bundle is `identity_key#one_time_key`. The peer needs both halves.
+fn generate_keys_returns_valid_bundle() {
     let mut account = Account::new();
-    let bundle = SessionInstance::generate_keys(&mut account).unwrap();
+    let bundle_bytes = SessionInstance::generate_keys(&mut account).unwrap();
 
-    assert_eq!(bundle.split('#').count(), 2);
+    let (identity, one_time) = SessionInstance::parse_keys_bundle(&bundle_bytes).unwrap();
+
+    assert!(!identity.as_bytes().is_empty());
+    assert!(!one_time.as_bytes().is_empty());
 }
 
 #[test]
@@ -53,14 +55,30 @@ fn round_trip_both_directions() {
 }
 
 #[test]
-fn create_inbound_rejects_malformed_bundle() {
+fn create_inbound_rejects_truncated_bundle() {
     let mut acc = Account::new();
     let mut peer = Account::new();
+
     let peer_bundle = SessionInstance::generate_keys(&mut peer).unwrap();
     let mut out = SessionInstance::create_outbound(&mut acc, "s", &peer_bundle).unwrap();
     let init = out.encrypt("".as_bytes()).unwrap();
 
-    assert!(SessionInstance::create_inbound(&mut peer, "s", "not-a-bundle", &init).is_err());
+    // Too short to even read the first u16 length
+    let truncated = b"\x00";
+
+    assert!(SessionInstance::create_inbound(&mut peer, "s", truncated, &init).is_err());
+}
+
+#[test]
+fn create_inbound_rejects_malformed_bundle() {
+    let mut acc = Account::new();
+    let mut peer = Account::new();
+
+    let peer_bundle = SessionInstance::generate_keys(&mut peer).unwrap();
+    let mut out = SessionInstance::create_outbound(&mut acc, "s", &peer_bundle).unwrap();
+    let init = out.encrypt("".as_bytes()).unwrap();
+
+    assert!(SessionInstance::create_inbound(&mut peer, "s", b"not-a-bundle", &init).is_err());
 }
 
 #[test]

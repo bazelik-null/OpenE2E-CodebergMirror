@@ -34,10 +34,11 @@ pub fn encrypt(
         .clone();
 
     // Compress message for network
-    let compressed = compress(plaintext)?;
+    let (is_compressed, to_encrypt) = compress(plaintext)?;
+    let payload = wrap_compression_flag(is_compressed, &to_encrypt);
 
     // Encrypt message for network with OLM
-    let net_encrypted = user.session_service.encrypt(&compressed)?;
+    let net_encrypted = user.session_service.encrypt(&payload)?;
 
     let db_message = match db_override {
         Some(m) => m,
@@ -78,7 +79,12 @@ pub fn decrypt(
     let net_decrypted = user.session_service.decrypt(ciphertext)?;
 
     // Decompress message from network
-    let decompressed = decompress(&net_decrypted)?;
+    let (was_compressed, payload) = unwrap_compression_flag(&net_decrypted)?;
+    let decompressed = if was_compressed {
+        decompress(payload)?
+    } else {
+        payload.to_vec()
+    };
 
     let db_message = match db_override {
         Some(m) => m,
@@ -99,7 +105,15 @@ pub fn decrypt(
     Ok(decompressed)
 }
 
-fn compress(bytes: &[u8]) -> Result<Vec<u8>, String> {
+fn compress(bytes: &[u8]) -> Result<(bool, Vec<u8>), String> {
+    // Avoid compression overhead for very small payloads
+    const MIN_INPUT: usize = 32;
+
+    if bytes.len() < MIN_INPUT {
+        debug!("Using decompressed text");
+        return Ok((false, bytes.to_vec()));
+    }
+
     let mut output = Vec::new();
     let params = BrotliEncoderParams::default();
 
@@ -112,7 +126,15 @@ fn compress(bytes: &[u8]) -> Result<Vec<u8>, String> {
         output.len(),
         (output.len() as f64 / bytes.len() as f64) * 100.0
     );
-    Ok(output)
+
+    // Keep ratio <= 100%
+    if output.len() <= bytes.len() {
+        debug!("Using compressed text");
+        Ok((true, output))
+    } else {
+        debug!("Using decompressed text");
+        Ok((false, bytes.to_vec()))
+    }
 }
 
 fn decompress(bytes: &[u8]) -> Result<Vec<u8>, String> {
@@ -129,6 +151,20 @@ fn decompress(bytes: &[u8]) -> Result<Vec<u8>, String> {
         output.len()
     );
     Ok(output)
+}
+
+fn wrap_compression_flag(is_compressed: bool, data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(1 + data.len());
+    out.push(if is_compressed { 1 } else { 0 });
+    out.extend_from_slice(data);
+    out
+}
+
+fn unwrap_compression_flag(bytes: &[u8]) -> Result<(bool, &[u8]), String> {
+    if bytes.is_empty() {
+        return Err("Missing compression flag".to_string());
+    }
+    Ok((bytes[0] == 1, &bytes[1..]))
 }
 
 /// Retrieves all messages from a session, sorts by timestamp, and formats them for display

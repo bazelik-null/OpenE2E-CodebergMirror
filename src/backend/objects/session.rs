@@ -7,8 +7,6 @@
  * (at your option) any later version.
  */
 
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD_NO_PAD;
 use vodozemac::{
     Curve25519PublicKey,
     olm::{Account, Message, OlmMessage, PreKeyMessage, Session, SessionConfig, SessionPickle},
@@ -26,7 +24,7 @@ impl SessionInstance {
 
     /// Generates identity and one-time keys for key exchange
     /// Returns a base64-encoded string in the format: identity_key#one_time_key
-    pub fn generate_keys(account: &mut Account) -> Result<String, String> {
+    pub fn generate_keys(account: &mut Account) -> Result<Vec<u8>, String> {
         account.generate_one_time_keys(1);
         let one_time_keys = account.one_time_keys();
 
@@ -37,45 +35,62 @@ impl SessionInstance {
 
         let identity_key = account.identity_keys().curve25519;
 
-        let keys_bundle = Self::encode_keys_bundle(&identity_key, one_time_key);
-        Ok(keys_bundle)
+        Self::encode_keys_bundle(&identity_key, one_time_key)
     }
 
-    /// Encodes identity and one-time keys as a base64 bundle
+    /// Bundle format (big-endian):
+    /// u16(identity_len) || identity_bytes || u16(one_time_len) || one_time_bytes
     fn encode_keys_bundle(
         identity_key: &Curve25519PublicKey,
         one_time_key: &Curve25519PublicKey,
-    ) -> String {
-        let identity_b64 = BASE64_STANDARD_NO_PAD.encode(identity_key.as_bytes());
-        let one_time_b64 = BASE64_STANDARD_NO_PAD.encode(one_time_key.as_bytes());
-        format!("{}{}{}", identity_b64, "#", one_time_b64)
-    }
+    ) -> Result<Vec<u8>, String> {
+        const MAX_U16: usize = u16::MAX as usize;
 
-    /// Parses a keys bundle string into identity and one-time public keys.
-    fn parse_keys_bundle(
-        keys_bundle: &str,
-    ) -> Result<(Curve25519PublicKey, Curve25519PublicKey), String> {
-        let parts: Vec<&str> = keys_bundle.split("#").collect();
-        if parts.len() != 2 {
-            return Err(
-                "Invalid keys bundle format: expected 'identity_key#one_time_key'".to_string(),
-            );
+        let id = identity_key.as_bytes();
+        let otk = one_time_key.as_bytes();
+
+        // Public keys should be small, but we enforce bounds for safety
+        if id.len() > MAX_U16 {
+            return Err(format!("identity key too large: {} bytes", id.len()));
+        }
+        if otk.len() > MAX_U16 {
+            return Err(format!("one-time key too large: {} bytes", otk.len()));
         }
 
-        let identity_key = Self::decode_public_key(parts[0], "identity")?;
-        let one_time_key = Self::decode_public_key(parts[1], "one-time")?;
-
-        Ok((identity_key, one_time_key))
+        let mut out = Vec::with_capacity(2 + id.len() + 2 + otk.len());
+        out.extend_from_slice(&(id.len() as u16).to_be_bytes());
+        out.extend_from_slice(id);
+        out.extend_from_slice(&(otk.len() as u16).to_be_bytes());
+        out.extend_from_slice(otk);
+        Ok(out)
     }
 
-    /// Decodes a base64-encoded public key.
-    fn decode_public_key(key_b64: &str, key_type: &str) -> Result<Curve25519PublicKey, String> {
-        let key_bytes = BASE64_STANDARD_NO_PAD
-            .decode(key_b64)
-            .map_err(|e| format!("Failed to decode {} key: {}", key_type, e))?;
+    fn parse_keys_bundle(
+        bundle: &[u8],
+    ) -> Result<(Curve25519PublicKey, Curve25519PublicKey), String> {
+        let mut i = 0usize;
 
-        Curve25519PublicKey::from_slice(&key_bytes)
-            .map_err(|e| format!("Invalid {} key bytes: {}", key_type, e))
+        // Read identity key
+        let id_len = read_u16(bundle, &mut i, "identity length")? as usize;
+        let id_bytes = read_bytes(bundle, &mut i, id_len, "identity key bytes")?;
+
+        // Read one-time key
+        let ot_len = read_u16(bundle, &mut i, "one-time length")? as usize;
+        let ot_bytes = read_bytes(bundle, &mut i, ot_len, "one-time key bytes")?;
+
+        // Reject trailing bytes
+        if i != bundle.len() {
+            return Err("Invalid bundle: trailing bytes after keys".to_string());
+        }
+
+        // Parse the public key
+        let identity_key = Curve25519PublicKey::from_slice(id_bytes)
+            .map_err(|e| format!("Invalid identity key bytes: {}", e))?;
+
+        let one_time_key = Curve25519PublicKey::from_slice(ot_bytes)
+            .map_err(|e| format!("Invalid one-time key bytes: {}", e))?;
+
+        Ok((identity_key, one_time_key))
     }
 
     // Session Creation
@@ -84,7 +99,7 @@ impl SessionInstance {
     pub fn create_outbound(
         account: &mut Account,
         name: &str,
-        remote_keys_bundle: &str,
+        remote_keys_bundle: &[u8],
     ) -> Result<Self, String> {
         let (remote_identity_key, remote_one_time_key) =
             Self::parse_keys_bundle(remote_keys_bundle)?;
@@ -106,7 +121,7 @@ impl SessionInstance {
     pub fn create_inbound(
         account: &mut Account,
         name: &str,
-        remote_keys_bundle: &str,
+        remote_keys_bundle: &[u8],
         first_message: &[u8],
     ) -> Result<Self, String> {
         let (remote_identity_key, _) = Self::parse_keys_bundle(remote_keys_bundle)?;
@@ -181,6 +196,34 @@ impl SessionInstance {
 
         Ok(SessionInstance { name, session })
     }
+}
+
+fn read_u16(buf: &[u8], i: &mut usize, field: &str) -> Result<u16, String> {
+    if buf.len() < *i + 2 {
+        return Err(format!("Truncated bundle while reading {}", field));
+    }
+    let v = u16::from_be_bytes([buf[*i], buf[*i + 1]]);
+    *i += 2;
+    Ok(v)
+}
+
+fn read_bytes<'a>(
+    buf: &'a [u8],
+    i: &mut usize,
+    len: usize,
+    field: &str,
+) -> Result<&'a [u8], String> {
+    if buf.len() < *i + len {
+        return Err(format!(
+            "Truncated bundle while reading {} (need {}, have {})",
+            field,
+            len,
+            buf.len().saturating_sub(*i)
+        ));
+    }
+    let out = &buf[*i..*i + len];
+    *i += len;
+    Ok(out)
 }
 
 #[cfg(test)]
