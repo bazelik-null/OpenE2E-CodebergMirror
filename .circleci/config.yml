@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   build-windows-cli:
     docker:
-      - image: rust:latest
+      - image: rustlang/rust:nightly
     steps:
       - checkout
       - run:
@@ -14,14 +14,14 @@ jobs:
           command: apt-get update && apt-get install -y mingw-w64
       - run:
           name: Build Windows CLI Release
-          command: cargo build --release --target x86_64-pc-windows-gnu
+          command: cargo +nightly build --release --target x86_64-pc-windows-gnu
       - store_artifacts:
           path: target/x86_64-pc-windows-gnu/release/OpenE2E.exe
           destination: OpenE2E-CLI_win64.exe
 
   build-windows-gui:
     docker:
-      - image: rust:latest
+      - image: rustlang/rust:nightly
     steps:
       - checkout
       - run:
@@ -32,26 +32,26 @@ jobs:
           command: apt-get update && apt-get install -y mingw-w64
       - run:
           name: Build Windows GUI Release
-          command: cargo build --release --features gui --target x86_64-pc-windows-gnu
+          command: cargo +nightly build --release --features gui --target x86_64-pc-windows-gnu
       - store_artifacts:
           path: target/x86_64-pc-windows-gnu/release/OpenE2E.exe
           destination: OpenE2E-GUI_win64.exe
 
   build-linux-64-cli:
     docker:
-      - image: rust:latest
+      - image: rustlang/rust:nightly
     steps:
       - checkout
       - run:
           name: Build Linux 64-bit CLI Release
-          command: cargo build --release --target x86_64-unknown-linux-gnu
+          command: cargo +nightly build --release --target x86_64-unknown-linux-gnu
       - store_artifacts:
           path: target/x86_64-unknown-linux-gnu/release/OpenE2E
           destination: OpenE2E-CLI_linux64
 
   build-linux-64-gui:
     docker:
-      - image: rust:latest
+      - image: rustlang/rust:nightly
     steps:
       - checkout
       - run:
@@ -59,16 +59,19 @@ jobs:
           command: apt-get update && apt-get install -y libfontconfig1-dev
       - run:
           name: Build Linux 64-bit GUI Release
-          command: cargo build --release --features gui --target x86_64-unknown-linux-gnu
+          command: cargo +nightly build --release --features gui --target x86_64-unknown-linux-gnu
       - store_artifacts:
           path: target/x86_64-unknown-linux-gnu/release/OpenE2E
           destination: OpenE2E-GUI_linux64
 
+orbs:
+  nix: nixpkgs/nix@0.6.0
+
   build_nix_cli:
-    docker:
-      - image: nixos/nix:latest
+    executor: nix/default
     steps:
       - checkout
+      - nix/install
       - run:
           name: Build NixOS CLI Release
           command: |
@@ -84,10 +87,10 @@ jobs:
           destination: OpenE2E-CLI_NixOS.tar.gz
 
   build_nix_gui:
-    docker:
-      - image: nixos/nix:latest
+    executor: nix/default
     steps:
       - checkout
+      - nix/install
       - run:
           name: Build NixOS GUI Release
           command: |

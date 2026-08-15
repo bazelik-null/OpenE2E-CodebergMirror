@@ -155,7 +155,7 @@ src/
 │   ├── gui/                   # Graphical interface
 │   │   └── slint/             # Slint UI layout
 │   ├── fluent_service.rs      # Localization system
-│   ├── encoding.rs            # Message encoding (base64)
+│   ├── encoding.rs            # Message encoding (base85)
 │   └── logger.rs              # Logging
 │
 ├── error_mapper.rs            # Error conversion to string
