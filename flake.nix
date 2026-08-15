@@ -21,7 +21,7 @@
         pkgs = import nixpkgs { inherit system overlays; };
         lib = pkgs.lib;
 
-        version = "1.1.0";
+        version = "1.3.0";
 
         # Dependencies for GUI build
         guiLibraries = with pkgs; [
@@ -93,18 +93,14 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Override to include rust-src for IDE jump-to-definition and code completion
-            (rust-bin.stable.latest.default.override { extensions = [ "rust-src" ]; })
-            cargo
-            rustc
-            rust-analyzer
-            clippy
+            (rust-bin.nightly.latest.default.override {
+              extensions = [ "rust-src" "rust-analyzer" "clippy" ];
+            })
             pkg-config
             cmake
             slint-lsp
           ] ++ guiLibraries;
 
-          # Make GUI libraries discoverable at runtime in dev shell
           shellHook = ''
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath guiLibraries}:$LD_LIBRARY_PATH"
           '';

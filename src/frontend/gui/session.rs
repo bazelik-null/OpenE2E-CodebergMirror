@@ -14,6 +14,7 @@ use super::{
     get_chat_history, get_session_names, refresh_messages, status,
 };
 use crate::backend::objects::session::SessionInstance;
+use crate::frontend::encoding;
 
 /// Result of session initialization: (optional pre-key message, session names, chat history)
 type SessionInitResult = Result<(Option<String>, Vec<SharedString>, Vec<ChatLine>), String>;
@@ -178,11 +179,12 @@ fn create_session_internal(
             .ok_or_else(|| "No user selected".to_string())?;
 
         if is_inbound {
+            let decoded = encoding::decode(first_msg.as_bytes())?;
             user.session_service.establish_in_session(
                 &mut user.account,
                 name,
                 peer_keys,
-                first_msg,
+                &decoded,
             )?;
             user.session_service.select_session(name)?;
             Ok(None)
@@ -190,8 +192,12 @@ fn create_session_internal(
             user.session_service
                 .establish_out_session(&mut user.account, name, peer_keys)?;
             user.session_service.select_session(name)?;
-            // Generate pre-key message for peer to open inbound session
-            Ok(Some(user.session_service.encrypt("")?))
+
+            let init_message = user.session_service.encrypt("".as_bytes())?;
+
+            let encoded = encoding::encode(&init_message);
+
+            Ok(Some(encoded))
         }
     })()?;
 

@@ -15,6 +15,7 @@ use super::{
 };
 
 use crate::backend::services::message_service;
+use crate::frontend::encoding;
 
 pub(super) fn wire_chat(
     ui: &MainWindow,
@@ -88,13 +89,15 @@ fn perform_encryption(
 
     let user = srv.get_current_user_mut().ok_or("User not found")?;
 
-    let ciphertext = message_service::encrypt(&repo.db_handle, user, plaintext)?;
+    let ciphertext = message_service::encrypt(&repo.db_handle, user, plaintext.as_bytes(), None)?;
+
+    let encoded = encoding::encode(&ciphertext);
 
     if let Err(e) = srv.autosave(&repo.db_handle) {
         log::error!("Autosave after encrypt failed: {}", e);
     }
 
-    Ok((ciphertext, get_chat_history(&srv, &repo)))
+    Ok((encoded, get_chat_history(&srv, &repo)))
 }
 
 // Decrypt
@@ -156,8 +159,9 @@ fn perform_decryption(
 
     let user = srv.get_current_user_mut().ok_or("User not found")?;
 
+    let decoded = encoding::decode(ciphertext.as_bytes())?;
     let _plaintext =
-        message_service::decrypt(&repo.db_handle, user, ciphertext).map_err(|e| e.to_string())?;
+        message_service::decrypt(&repo.db_handle, user, &decoded, None).map_err(|e| e.to_string())?;
 
     if let Err(e) = srv.autosave(&repo.db_handle) {
         log::error!("Autosave after decrypt failed: {}", e);

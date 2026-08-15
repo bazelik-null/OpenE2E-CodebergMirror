@@ -1,6 +1,6 @@
 [package]
 name = "OpenE2E"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2024"
 license = "GPL-3.0"
 description = "A work in progress lightweight GUI client written in Rust for secure end-to-end encrypted communication through open, untrusted channels (government messengers, email, etc.)."
@@ -41,3 +41,16 @@ slint-build = "1"
 [dev-dependencies]
 # Isolated temp directories for the fjall database in integration tests.
 tempfile = "3"
+
+[profile.dev]
+opt-level = 0
+debug = 1
+incremental = true
+codegen-units = 64
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+incremental = false
