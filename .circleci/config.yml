@@ -64,47 +64,6 @@ jobs:
           path: target/x86_64-unknown-linux-gnu/release/OpenE2E
           destination: OpenE2E-GUI_linux64
 
-orbs:
-  nix: nixpkgs/nix@0.6.0
-
-  build_nix_cli:
-    executor: nix/default
-    steps:
-      - checkout
-      - nix/install
-      - run:
-          name: Build NixOS CLI Release
-          command: |
-            nix flake update
-            nix build .#cli -o result-cli
-      - run:
-          name: Create CLI tarball
-          command: |
-            cp -r result-cli OpenE2E-CLI_NixOS
-            tar czf OpenE2E-CLI_NixOS.tar.gz OpenE2E-CLI_NixOS/
-      - store_artifacts:
-          path: OpenE2E-CLI_NixOS.tar.gz
-          destination: OpenE2E-CLI_NixOS.tar.gz
-
-  build_nix_gui:
-    executor: nix/default
-    steps:
-      - checkout
-      - nix/install
-      - run:
-          name: Build NixOS GUI Release
-          command: |
-            nix flake update
-            nix build .#gui -o result-gui
-      - run:
-          name: Create GUI tarball
-          command: |
-            cp -r result-gui OpenE2E-GUI_NixOS
-            tar czf OpenE2E-GUI_NixOS.tar.gz OpenE2E-GUI_NixOS/
-      - store_artifacts:
-          path: OpenE2E-GUI_NixOS.tar.gz
-          destination: OpenE2E-GUI_NixOS.tar.gz
-
 workflows:
   build:
     jobs:
@@ -112,5 +71,3 @@ workflows:
       - build-windows-gui
       - build-linux-64-cli
       - build-linux-64-gui
-      - build_nix_cli
-      - build_nix_gui
