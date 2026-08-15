@@ -7,5 +7,5 @@
  * (at your option) any later version.
  */
 
-pub mod services;
 pub mod objects;
+pub mod services;

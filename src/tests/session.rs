@@ -26,7 +26,7 @@ fn established_pair() -> (SessionInstance, SessionInstance) {
     let bob_bundle = SessionInstance::generate_keys(&mut bob).unwrap();
 
     let mut alice_out = SessionInstance::create_outbound(&mut alice, "s", &bob_bundle).unwrap();
-    let init = alice_out.encrypt("").unwrap();
+    let init = alice_out.encrypt("".as_bytes()).unwrap();
     let bob_in = SessionInstance::create_inbound(&mut bob, "s", &alice_bundle, &init).unwrap();
 
     (alice_out, bob_in)
@@ -45,11 +45,11 @@ fn generate_keys_returns_identity_and_one_time() {
 fn round_trip_both_directions() {
     let (mut alice, mut bob) = established_pair();
 
-    let ct = alice.encrypt("secret1").unwrap();
-    assert_eq!(bob.decrypt(&ct).unwrap(), "secret1");
+    let ct = alice.encrypt("secret1".as_bytes()).unwrap();
+    assert_eq!(bob.decrypt(&ct).unwrap(), "secret1".as_bytes());
 
-    let ct2 = bob.encrypt("secret2").unwrap();
-    assert_eq!(alice.decrypt(&ct2).unwrap(), "secret2");
+    let ct2 = bob.encrypt("secret2".as_bytes()).unwrap();
+    assert_eq!(alice.decrypt(&ct2).unwrap(), "secret2".as_bytes());
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn create_inbound_rejects_malformed_bundle() {
     let mut peer = Account::new();
     let peer_bundle = SessionInstance::generate_keys(&mut peer).unwrap();
     let mut out = SessionInstance::create_outbound(&mut acc, "s", &peer_bundle).unwrap();
-    let init = out.encrypt("").unwrap();
+    let init = out.encrypt("".as_bytes()).unwrap();
 
     assert!(SessionInstance::create_inbound(&mut peer, "s", "not-a-bundle", &init).is_err());
 }
@@ -68,15 +68,15 @@ fn serialize_deserialize_preserves_session() {
     // A reloaded (unpickled) session must keep its ratchet state and continue talking to the peer.
     let (mut alice, mut bob) = established_pair();
 
-    let ct = alice.encrypt("first").unwrap();
-    assert_eq!(bob.decrypt(&ct).unwrap(), "first");
+    let ct = alice.encrypt("first".as_bytes()).unwrap();
+    assert_eq!(bob.decrypt(&ct).unwrap(), "first".as_bytes());
 
     let key = [3u8; 32];
     let pickle = alice.serialize(&key).unwrap();
     let mut restored = SessionInstance::deserialize("s".to_string(), pickle, &key).unwrap();
 
-    let ct2 = restored.encrypt("after restore").unwrap();
-    assert_eq!(bob.decrypt(&ct2).unwrap(), "after restore");
+    let ct2 = restored.encrypt("after restore".as_bytes()).unwrap();
+    assert_eq!(bob.decrypt(&ct2).unwrap(), "after restore".as_bytes());
 }
 
 #[test]

@@ -26,7 +26,7 @@
 
 # Overview
 
-**OpenE2E** is a manual secure chat app for exchanging encrypted messages over any channel - SMS, email, messengers, social platforms, or other untrusted channels. You encrypt messages locally on your device, copy the encrypted text, and send it anywhere. Only you and the recipient can decrypt it.
+**OpenE2E** is a manual secure chat app for exchanging encrypted messages over any channel - SMS, email, messengers, social platforms, or other untrusted channels. You encrypt and compress messages locally on your device, copy the encrypted text, and send it anywhere. Only you and the recipient can decrypt it.
 
 The app uses **Matrix OLM** (via `voldozemac`) with **AES-256-GCM encryption** and **Perfect Forward Secrecy (PFS)**, ensuring that past messages remain protected even if later keys are compromised. All data stays on your device - there is no cloud sync or server-side storage.
 
@@ -148,13 +148,14 @@ src/
 │       ├── storage_service.rs  # Database operations
 │       ├── user_service.rs     # User workflows (create/auth/etc.)
 │       ├── session_service.rs  # Session workflows (init/handshake/etc.)
-│       └── message_service.rs  # Message workflows (encrypt/save/etc.)
+│       └── message_service.rs  # Message workflows (encrypt/save/compress/etc.)
 │
 ├── frontend/                  # UI and user interaction
 │   ├── cli/                   # Command-line interface
 │   ├── gui/                   # Graphical interface
 │   │   └── slint/             # Slint UI layout
 │   ├── fluent_service.rs      # Localization system
+│   ├── encoding.rs            # Message encoding (base64)
 │   └── logger.rs              # Logging
 │
 ├── error_mapper.rs            # Error conversion to string

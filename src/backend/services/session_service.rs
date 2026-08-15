@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-use crate::backend::services::storage_service::WorkerHandle;
 use crate::backend::objects::session::SessionInstance;
+use crate::backend::services::storage_service::WorkerHandle;
 use vodozemac::olm::Account;
 
 pub struct SessionService {
@@ -49,10 +49,10 @@ impl SessionService {
         account: &mut Account,
         name: &str,
         remote_keys_bundle: &str,
-        first_message_b64: &str,
+        first_message: &[u8],
     ) -> Result<(), String> {
         let session =
-            SessionInstance::create_inbound(account, name, remote_keys_bundle, first_message_b64)?;
+            SessionInstance::create_inbound(account, name, remote_keys_bundle, first_message)?;
         self.add_session(session)
     }
 
@@ -147,7 +147,7 @@ impl SessionService {
     // Encryption/Decryption
 
     /// Encrypts plaintext using the active session
-    pub fn encrypt(&mut self, plaintext: &str) -> Result<String, String> {
+    pub fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, String> {
         let session = self
             .get_current_session_mut()
             .ok_or_else(|| "No session selected".to_string())?;
@@ -156,12 +156,12 @@ impl SessionService {
     }
 
     /// Decrypts ciphertext using the active session
-    pub fn decrypt(&mut self, ciphertext_b64: &str) -> Result<String, String> {
+    pub fn decrypt(&mut self, ciphertext: &[u8]) -> Result<Vec<u8>, String> {
         let session = self
             .get_current_session_mut()
             .ok_or_else(|| "No session selected".to_string())?;
 
-        session.decrypt(ciphertext_b64)
+        session.decrypt(ciphertext)
     }
 
     // Persistence

@@ -10,7 +10,7 @@
 use slint::{ComponentHandle, SharedString};
 
 use super::{
-    ChatLine, Localizer, MainWindow, Service, Messages, RepositoryCell, fail, fail_key,
+    ChatLine, Localizer, MainWindow, Messages, RepositoryCell, Service, fail, fail_key,
     get_chat_history, refresh_messages, status,
 };
 

@@ -118,18 +118,6 @@ impl User {
     fn derive_encryption_key(salt: SaltString, password: &str) -> Result<[u8; KEY_LENGTH], String> {
         derive_key_from_password(password, salt)
     }
-
-    // Messaging
-
-    /// Decrypts ciphertext using the active session
-    pub fn encrypt(&mut self, plaintext: &str) -> Result<String, String> {
-        self.session_service.encrypt(plaintext)
-    }
-
-    /// Decrypts ciphertext
-    pub fn decrypt(&mut self, ciphertext_b64: &str) -> Result<String, String> {
-        self.session_service.decrypt(ciphertext_b64)
-    }
 }
 
 // Utilities

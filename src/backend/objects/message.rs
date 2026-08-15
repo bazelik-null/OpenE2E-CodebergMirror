@@ -27,7 +27,7 @@ pub struct Message {
 
 impl Message {
     /// Encrypts a message and serializes it to JSON bytes
-    pub fn encrypt(key: &[u8; 32], sender: &str, plaintext: &str) -> Result<Vec<u8>, String> {
+    pub fn encrypt(key: &[u8; 32], sender: &str, plaintext: &[u8]) -> Result<Vec<u8>, String> {
         // Initialize AES-256-GCM cipher with the provided key
         let cipher = Aes256Gcm::new(key.into());
 
@@ -39,7 +39,7 @@ impl Message {
 
         // Encrypt the plaintext
         let ciphertext = cipher
-            .encrypt(&nonce, plaintext.as_bytes())
+            .encrypt(&nonce, plaintext)
             .map_err(|e| format!("Encryption failed: {}", e))?;
 
         // Get current Unix timestamp

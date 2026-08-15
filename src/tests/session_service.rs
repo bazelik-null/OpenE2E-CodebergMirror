@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 bazelik-bob
+ * Copyright (C) 2026 bazelik-dev
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -91,19 +91,19 @@ fn two_party_conversation_through_services() {
         .establish_out_session(&mut alice_acc, "chat", &bob_bundle)
         .unwrap();
     alice.select_session("chat").unwrap();
-    let init = alice.encrypt("").unwrap();
+    let init = alice.encrypt("".as_bytes()).unwrap();
 
     bob.establish_in_session(&mut bob_acc, "chat", &alice_bundle, &init)
         .unwrap();
     bob.select_session("chat").unwrap();
 
     // Several messages in both directions.
-    let m1 = alice.encrypt("secret1").unwrap();
-    assert_eq!(bob.decrypt(&m1).unwrap(), "secret1");
+    let m1 = alice.encrypt("secret1".as_bytes()).unwrap();
+    assert_eq!(bob.decrypt(&m1).unwrap(), "secret1".as_bytes());
 
-    let m2 = bob.encrypt("secret2").unwrap();
-    assert_eq!(alice.decrypt(&m2).unwrap(), "secret2");
+    let m2 = bob.encrypt("secret2".as_bytes()).unwrap();
+    assert_eq!(alice.decrypt(&m2).unwrap(), "secret2".as_bytes());
 
-    let m3 = alice.encrypt("secret3").unwrap();
-    assert_eq!(bob.decrypt(&m3).unwrap(), "secret3");
+    let m3 = alice.encrypt("secret3".as_bytes()).unwrap();
+    assert_eq!(bob.decrypt(&m3).unwrap(), "secret3".as_bytes());
 }

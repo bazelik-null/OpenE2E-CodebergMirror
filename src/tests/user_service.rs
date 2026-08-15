@@ -12,8 +12,8 @@
 /// Each test opens the service on its own temporary directory via Repository and UserService so they stay isolated and can run in parallel.
 /// The focus is persistence: state written before a clean shutdown must reload after "restarting" (reopening) the service.
 use super::*;
-use crate::backend::services::repository::Repository;
 use crate::backend::objects::session::SessionInstance;
+use crate::backend::services::repository::Repository;
 use vodozemac::olm::Account;
 
 /// A fresh temporary database path. The returned `TempDir` must be kept alive for the duration of the test. Dropping it deletes the directory.

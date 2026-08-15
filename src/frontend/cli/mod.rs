@@ -13,12 +13,14 @@ use colorize::AnsiColor;
 use log::{error, info};
 use std::io::{self, Write};
 
+use crate::backend::objects::session::SessionInstance;
+use crate::backend::objects::user::User;
 use crate::backend::services::message_service;
 use crate::backend::services::repository::Repository;
 use crate::backend::services::user_service::UserService;
-use crate::backend::objects::session::SessionInstance;
-use crate::backend::objects::user::User;
+use crate::error_mapper::MapErrorToString;
 use crate::frontend::cli::commands::{Command, scan_commands};
+use crate::frontend::encoding;
 use crate::frontend::fluent_service::{Localization, fluent_args};
 
 const HEADER_WIDTH: usize = 36;
@@ -326,8 +328,13 @@ impl Application {
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        let encrypted = message_service::encrypt(&self.repository.db_handle, user, text)?;
-        println!("{}", encrypted);
+        // Encrypt text
+        let encrypted =
+            message_service::encrypt(&self.repository.db_handle, user, text.as_bytes(), None)?;
+        // Encode text to base 64
+        let encoded = encoding::encode(&encrypted);
+
+        println!("{}", encoded);
 
         self.user_service.autosave(&self.repository.db_handle)?;
         println!();
@@ -343,8 +350,14 @@ impl Application {
             .get_current_user_mut()
             .ok_or_else(|| self.localization.get("no-user-selected"))?;
 
-        let decrypted = message_service::decrypt(&self.repository.db_handle, user, text)?;
-        println!("{}", decrypted);
+        // Decode text from base 64
+        let decoded = encoding::decode(text.as_bytes())?;
+        // Decrypt text
+        let decrypted = message_service::decrypt(&self.repository.db_handle, user, &decoded, None)?;
+        // Recover string
+        let string = String::from_utf8(decrypted).map_err_to_string()?;
+
+        println!("{}", string);
 
         self.user_service.autosave(&self.repository.db_handle)?;
         println!();
@@ -546,15 +559,13 @@ fn create_inbound_session(
     println!();
 
     println!("{}", localization.get("paste-init-message").grey());
-    let first_message = prompt_input();
+    let init_message = prompt_input();
+    // Decode init message from base 64
+    let decoded = encoding::decode(init_message.as_bytes())?;
     println!();
 
-    user.session_service.establish_in_session(
-        &mut user.account,
-        name,
-        &remote_keys,
-        &first_message,
-    )?;
+    user.session_service
+        .establish_in_session(&mut user.account, name, &remote_keys, &decoded)?;
 
     user.session_service.select_session(name)
 }
@@ -580,8 +591,10 @@ fn create_outbound_session(
 
     println!("{}", localization.get("session-established").green());
 
-    let init_message = user.session_service.encrypt("")?;
-    println!("{}", init_message.bold());
+    let init_message = user.session_service.encrypt("".as_bytes())?;
+    // Encode init message to base 64
+    let encoded = encoding::encode(&init_message);
+    println!("{}", encoded.bold());
 
     Ok(())
 }

@@ -7,19 +7,25 @@
  * (at your option) any later version.
  */
 
+use brotli::enc::BrotliEncoderParams;
 use colorize::AnsiColor;
+use log::debug;
 use rand::RngExt;
 
-use crate::backend::services::storage_service::WorkerHandle;
 use crate::backend::objects::message::Message;
 use crate::backend::objects::user::User;
+use crate::backend::services::storage_service::WorkerHandle;
+use crate::error_mapper::MapErrorToString;
 
 /// Encrypts plaintext using the active session and saves to database
+/// Compresses message via brotli
+/// Pass db_override to override saved in database message
 pub fn encrypt(
     db_handle: &WorkerHandle,
     user: &mut User,
-    plaintext: &str,
-) -> Result<String, String> {
+    plaintext: &[u8],
+    db_override: Option<&[u8]>, // If used saves this in DB instead of message
+) -> Result<Vec<u8>, String> {
     let session_name = user
         .session_service
         .get_current_session()
@@ -27,11 +33,19 @@ pub fn encrypt(
         .name
         .clone();
 
+    // Compress message for network
+    let compressed = compress(plaintext)?;
+
     // Encrypt message for network with OLM
-    let net_encrypted = user.encrypt(plaintext)?;
+    let net_encrypted = user.session_service.encrypt(&compressed)?;
+
+    let db_message = match db_override {
+        Some(m) => m,
+        None => plaintext,
+    };
 
     // Encrypt message for DB with AES-256-GCM
-    let db_encrypted = Message::encrypt(&user.encryption_key, &user.name, plaintext)?;
+    let db_encrypted = Message::encrypt(&user.encryption_key, &user.name, db_message)?;
 
     // Generate random message ID
     let mut rng = rand::rng();
@@ -45,11 +59,14 @@ pub fn encrypt(
 }
 
 /// Decrypts ciphertext using the active session and saves to database
+/// Decompresses message via brotli
+/// Pass db_override to override saved in database message
 pub fn decrypt(
     db_handle: &WorkerHandle,
     user: &mut User,
-    ciphertext_b64: &str,
-) -> Result<String, String> {
+    ciphertext: &[u8],
+    db_override: Option<&[u8]>, // If used saves this in DB instead of message
+) -> Result<Vec<u8>, String> {
     let session_name = user
         .session_service
         .get_current_session()
@@ -58,10 +75,18 @@ pub fn decrypt(
         .clone();
 
     // Decrypt message from network with OLM
-    let net_decrypted = user.decrypt(ciphertext_b64)?;
+    let net_decrypted = user.session_service.decrypt(ciphertext)?;
+
+    // Decompress message from network
+    let decompressed = decompress(&net_decrypted)?;
+
+    let db_message = match db_override {
+        Some(m) => m,
+        None => &decompressed,
+    };
 
     // Encrypt decrypted message for DB with AES-256-GCM
-    let db_encrypted = Message::encrypt(&user.encryption_key, &session_name, &net_decrypted)?;
+    let db_encrypted = Message::encrypt(&user.encryption_key, &session_name, db_message)?;
 
     // Generate random message ID
     let mut rng = rand::rng();
@@ -71,7 +96,39 @@ pub fn decrypt(
     let db = db_handle.worker();
     db.save_message(&message_id, &session_name, &db_encrypted)?;
 
-    Ok(net_decrypted)
+    Ok(decompressed)
+}
+
+fn compress(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let mut output = Vec::new();
+    let params = BrotliEncoderParams::default();
+
+    brotli::BrotliCompress(&mut std::io::Cursor::new(bytes), &mut output, &params)
+        .map_err_to_string()?;
+
+    debug!(
+        "Compression complete: {} -> {} bytes ({:.1}% ratio)",
+        bytes.len(),
+        output.len(),
+        (output.len() as f64 / bytes.len() as f64) * 100.0
+    );
+    Ok(output)
+}
+
+fn decompress(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let mut output = Vec::new();
+    let mut decompressor = brotli::Decompressor::new(
+        std::io::Cursor::new(bytes),
+        4096, // buffer size
+    );
+
+    std::io::Read::read_to_end(&mut decompressor, &mut output).map_err_to_string()?;
+    debug!(
+        "Decompression complete: {} -> {} bytes",
+        bytes.len(),
+        output.len()
+    );
+    Ok(output)
 }
 
 /// Retrieves all messages from a session, sorts by timestamp, and formats them for display
@@ -162,3 +219,7 @@ pub fn get_session_history(
         })
         .collect())
 }
+
+#[cfg(test)]
+#[path = "../../tests/message_service.rs"]
+mod tests;

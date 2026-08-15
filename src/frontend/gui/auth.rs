@@ -10,7 +10,7 @@
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::{
-    Localizer, MainWindow, Service, Messages, RepositoryCell, fail, fail_key, get_session_names,
+    Localizer, MainWindow, Messages, RepositoryCell, Service, fail, fail_key, get_session_names,
     refresh_messages, refresh_users, status,
 };
 

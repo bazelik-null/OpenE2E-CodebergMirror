@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-use crate::backend::services::storage_service::WorkerHandle;
 use crate::backend::objects::user::{SerializedUserTurple, User};
+use crate::backend::services::storage_service::WorkerHandle;
 use crate::error_mapper::MapErrorToString;
 
 // SerializedUser

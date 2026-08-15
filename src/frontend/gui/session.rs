@@ -10,7 +10,7 @@
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::{
-    ChatLine, Localizer, MainWindow, Service, Messages, RepositoryCell, fail, fail_key,
+    ChatLine, Localizer, MainWindow, Messages, RepositoryCell, Service, fail, fail_key,
     get_chat_history, get_session_names, refresh_messages, status,
 };
 use crate::backend::objects::session::SessionInstance;

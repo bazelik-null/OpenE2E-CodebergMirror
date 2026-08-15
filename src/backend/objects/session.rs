@@ -107,10 +107,10 @@ impl SessionInstance {
         account: &mut Account,
         name: &str,
         remote_keys_bundle: &str,
-        first_message_b64: &str,
+        first_message: &[u8],
     ) -> Result<Self, String> {
         let (remote_identity_key, _) = Self::parse_keys_bundle(remote_keys_bundle)?;
-        let pre_key_message = PreKeyMessage::from_base64(first_message_b64).map_err_to_string()?;
+        let pre_key_message = PreKeyMessage::from_bytes(first_message).map_err_to_string()?;
 
         let session_config = SessionConfig::version_1();
         let session_creation_result = account
@@ -126,39 +126,37 @@ impl SessionInstance {
     // Encryption/Decryption
 
     /// Encrypts plaintext using this session
-    pub fn encrypt(&mut self, plaintext: &str) -> Result<String, String> {
+    pub fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, String> {
         let encrypted = self.session.encrypt(plaintext).map_err_to_string()?;
         Ok(Self::encode_olm_message(&encrypted))
     }
 
     /// Decrypts ciphertext using this session
-    pub fn decrypt(&mut self, ciphertext_b64: &str) -> Result<String, String> {
-        let olm_message = Self::decode_olm_message(ciphertext_b64)?;
-        let plaintext = self.session.decrypt(&olm_message).map_err_to_string()?;
-
-        String::from_utf8(plaintext).map_err_to_string()
+    pub fn decrypt(&mut self, ciphertext: &[u8]) -> Result<Vec<u8>, String> {
+        let olm_message = Self::decode_olm_message(ciphertext)?;
+        self.session.decrypt(&olm_message).map_err_to_string()
     }
 
-    /// Encodes an OlmMessage to base64
-    fn encode_olm_message(message: &OlmMessage) -> String {
+    /// Encodes an OlmMessage to bytes
+    fn encode_olm_message(message: &OlmMessage) -> Vec<u8> {
         match message {
-            OlmMessage::Normal(msg) => msg.to_base64(),
-            OlmMessage::PreKey(msg) => msg.to_base64(),
+            OlmMessage::Normal(msg) => msg.to_bytes(),
+            OlmMessage::PreKey(msg) => msg.to_bytes(),
         }
     }
 
-    /// Decodes a base64-encoded message into an OlmMessage
+    /// Decodes a byte message into an OlmMessage
     /// First tries to decode as pre-key, then as regular
-    fn decode_olm_message(ciphertext_b64: &str) -> Result<OlmMessage, String> {
-        if let Ok(pre_key_msg) = PreKeyMessage::from_base64(ciphertext_b64) {
+    fn decode_olm_message(ciphertext: &[u8]) -> Result<OlmMessage, String> {
+        if let Ok(pre_key_msg) = PreKeyMessage::from_bytes(ciphertext) {
             return Ok(OlmMessage::PreKey(pre_key_msg));
         }
 
-        if let Ok(normal_msg) = Message::from_base64(ciphertext_b64) {
+        if let Ok(normal_msg) = Message::from_bytes(ciphertext) {
             return Ok(OlmMessage::Normal(normal_msg));
         }
 
-        Err("Failed to decode message from base64".to_string())
+        Err("Failed to decode message from bytes".to_string())
     }
 
     // Persistence
