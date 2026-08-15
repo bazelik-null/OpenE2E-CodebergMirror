@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   build-windows-cli:
     docker:
-      - image: rustlang/rust:latest
+      - image: rust:latest
     steps:
       - checkout
       - run:
@@ -21,7 +21,7 @@ jobs:
 
   build-windows-gui:
     docker:
-      - image: rustlang/rust:latest
+      - image: rust:latest
     steps:
       - checkout
       - run:
@@ -39,7 +39,7 @@ jobs:
 
   build-linux-64-cli:
     docker:
-      - image: rustlang/rust:latest
+      - image: rust:latest
     steps:
       - checkout
       - run:
@@ -51,7 +51,7 @@ jobs:
 
   build-linux-64-gui:
     docker:
-      - image: rustlang/rust:latest
+      - image: rust:latest
     steps:
       - checkout
       - run:
