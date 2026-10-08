@@ -144,7 +144,7 @@ export component ChatView inherits VerticalLayout {
                     min-height: 200px;
                     property <int> msg-count: message-count;
                     changed msg-count => {
-                        self.viewport-y = min(0px, self.height - self.viewport-height);
+                        self.content-y = min(0px, self.height - self.content-height);
                     }
 
                     for line in messages: Rectangle {

@@ -7,15 +7,15 @@
  * (at your option) any later version.
  */
 
-use base85;
+use base64::{Engine, prelude::BASE64_STANDARD_NO_PAD};
 
 use crate::error_mapper::MapErrorToString;
 
 pub fn encode(text: &[u8]) -> String {
-    base85::encode(text)
+    BASE64_STANDARD_NO_PAD.encode(text)
 }
 
 pub fn decode(text: &[u8]) -> Result<Vec<u8>, String> {
     let s = std::str::from_utf8(text).map_err_to_string()?;
-    base85::decode(s).map_err_to_string()
+    BASE64_STANDARD_NO_PAD.decode(s).map_err_to_string()
 }
